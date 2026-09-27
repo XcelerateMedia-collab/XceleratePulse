@@ -46,8 +46,11 @@ export async function getCampaigns(
       args.push(...assignedCampaignIds);
     }
   } else if (role === "EMPLOYEE") {
-    sql += " WHERE c.id IN (SELECT DISTINCT campaign_id FROM campaign_creators WHERE LOWER(COALESCE(execution_owner, '')) = LOWER(?)) ";
-    args.push(orgName); // orgName carries the employee name for EMPLOYEE role
+    sql += ` WHERE (
+      LOWER(COALESCE(c.xcelerate_poc, '')) = LOWER(?) 
+      OR c.id IN (SELECT DISTINCT campaign_id FROM campaign_creators WHERE LOWER(COALESCE(execution_owner, '')) = LOWER(?))
+    ) `;
+    args.push(orgName, orgName); // orgName carries the employee name for EMPLOYEE role
     if (assignedCampaignIds && assignedCampaignIds.length > 0) {
       const placeholders = assignedCampaignIds.map(() => "?").join(", ");
       sql += ` AND c.id IN (${placeholders}) `;
@@ -223,8 +226,8 @@ export async function getCampaignDeliverables(
         delivArgs.push(...assignedCampaignIds);
       }
     } else if (role === "EMPLOYEE") {
-      delivSql += ` WHERE LOWER(COALESCE(d.execution_owner, '')) = LOWER(?)`;
-      delivArgs.push(orgName); // orgName carries the employee name for EMPLOYEE role
+      delivSql += ` WHERE (LOWER(COALESCE(d.execution_owner, '')) = LOWER(?) OR LOWER(COALESCE(c.xcelerate_poc, '')) = LOWER(?))`;
+      delivArgs.push(orgName, orgName); // orgName carries the employee name for EMPLOYEE role
       if (assignedCampaignIds && assignedCampaignIds.length > 0) {
         const placeholders = assignedCampaignIds.map(() => "?").join(", ");
         delivSql += ` AND c.id IN (${placeholders})`;
@@ -261,8 +264,11 @@ export async function getCampaignDeliverables(
     campSql += ` AND LOWER(org_name) = LOWER(?)`;
     campArgs.push(orgName);
   } else if (role === "EMPLOYEE") {
-    campSql += ` AND id IN (SELECT DISTINCT campaign_id FROM campaign_creators WHERE LOWER(COALESCE(execution_owner, '')) = LOWER(?))`;
-    campArgs.push(orgName);
+    campSql += ` AND (
+      LOWER(COALESCE(xcelerate_poc, '')) = LOWER(?)
+      OR id IN (SELECT DISTINCT campaign_id FROM campaign_creators WHERE LOWER(COALESCE(execution_owner, '')) = LOWER(?))
+    )`;
+    campArgs.push(orgName, orgName);
   }
 
   const campResult = await db.execute({ sql: campSql, args: campArgs });
@@ -284,7 +290,7 @@ export async function getCampaignDeliverables(
     created_at: String(cRow.created_at),
   };
 
-  // 2. Query Deliverables (Strictly isolated by execution_owner for EMPLOYEE)
+  // 2. Query Deliverables (Strictly isolated by execution_owner or xcelerate_poc for EMPLOYEE)
   let delivSql = `
     SELECT 
       d.*,
@@ -299,8 +305,8 @@ export async function getCampaignDeliverables(
   const delivArgs: any[] = [campaignId];
 
   if (role === "EMPLOYEE") {
-    delivSql += ` AND LOWER(COALESCE(d.execution_owner, '')) = LOWER(?)`;
-    delivArgs.push(orgName);
+    delivSql += ` AND (LOWER(COALESCE(d.execution_owner, '')) = LOWER(?) OR LOWER(COALESCE(c.xcelerate_poc, '')) = LOWER(?))`;
+    delivArgs.push(orgName, orgName);
   }
 
   delivSql += ` ORDER BY d.followers_count DESC`;
@@ -893,18 +899,31 @@ export async function getOrganizationNames(): Promise<string[]> {
 }
 
 /**
- * Fetch distinct employee/execution owner names from campaign creators.
+ * Fetch distinct employee/execution owner names from campaign creators and campaigns (Xcelerate POC).
  */
 export async function getExecutionOwners(): Promise<string[]> {
   await initDatabase();
 
-  const result = await db.execute(
-    `SELECT DISTINCT execution_owner FROM campaign_creators 
-     WHERE execution_owner IS NOT NULL AND TRIM(execution_owner) != '' 
-     ORDER BY execution_owner ASC`
-  );
+  const result = await db.execute(`
+    SELECT DISTINCT name FROM (
+      SELECT TRIM(execution_owner) as name FROM campaign_creators 
+      WHERE execution_owner IS NOT NULL AND TRIM(execution_owner) != ''
+      UNION
+      SELECT TRIM(xcelerate_poc) as name FROM campaigns 
+      WHERE xcelerate_poc IS NOT NULL AND TRIM(xcelerate_poc) != ''
+    )
+    WHERE name != '' 
+      AND LOWER(name) NOT IN ('all ops leads', 'team xcelerate', 'n/a', 'unassigned')
+    ORDER BY name ASC
+  `);
 
-  return result.rows.map((row: any) => String(row.execution_owner).trim());
+  const owners = result.rows.map((row: any) => String(row.name).trim()).filter(Boolean);
+
+  if (!owners.includes("Payal")) {
+    owners.unshift("Payal");
+  }
+
+  return owners;
 }
 
 /**

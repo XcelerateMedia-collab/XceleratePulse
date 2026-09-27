@@ -204,12 +204,19 @@ export function mapRowToDeliverable(
   const campaignMonth = formatCleanMonth(n.campaignmonth || rawRow["Campaign Month"]);
   const clientType = parseString(n.clienttype || rawRow["Client Type(Brand, Agency, Other)"] || rawRow["Client Type"], "Brand");
   
-  const executionOwner = parseString(n.executionowner || rawRow["Execution Owner"], "");
+  const rawPoc = parseString(
+    n.xceleratepoc || 
+    rawRow["Xcelerate POC"] || 
+    rawRow["Execution Owner"] || 
+    n.executionowner, 
+    ""
+  );
+  const executionOwner = parseString(n.executionowner || rawRow["Execution Owner"] || rawPoc, "");
   const explicitBrand = parseString(n.brandagencyname || rawRow["Brand/Agency Name"] || rawRow["Brand Name"], "");
   // Strictly use explicit Brand/Agency Name from Column E. Never guess or extract fake brands from campaign names!
   const orgName = explicitBrand.trim() || "Unassigned";
   
-  const xceleratePoc = executionOwner || parseString(n.xceleratepoc || rawRow["Xcelerate POC"], "Team Xcelerate");
+  const xceleratePoc = rawPoc || "Team Xcelerate";
   const rawBrandPoc = parseString(
     n.brandagencypoc || 
     n.brandpoc || 

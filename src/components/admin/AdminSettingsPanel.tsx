@@ -524,184 +524,405 @@ export const AdminSettingsPanel: React.FC<AdminSettingsPanelProps> = React.memo(
           )}
         </div>
       ) : (
-        <div className="bg-white border border-slate-200 shadow-xs rounded-2xl overflow-hidden">
-          {/* Table Header */}
-          <div className="hidden lg:grid grid-cols-[1.5fr_1.5fr_0.8fr_0.7fr_1fr_auto] gap-4 px-5 py-3 border-b border-slate-200 bg-slate-100 text-slate-700 font-extrabold uppercase text-[11px]">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Organization</span>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Username / Email</span>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Password</span>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Role & Scope</span>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Status</span>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Actions</span>
-          </div>
-
-          {/* Table Rows */}
-          <div className="divide-y divide-slate-100">
+        <div className="space-y-4">
+          {/* ── MOBILE VIEW: Dedicated Sleek Role Cards (visible on mobile < lg) ── */}
+          <div className="lg:hidden space-y-3 pb-8">
             {filteredCredentials.map((cred) => (
               <div
                 key={cred.id}
-                className={`grid grid-cols-1 lg:grid-cols-[1.5fr_1.5fr_0.8fr_0.7fr_1fr_auto] gap-3 lg:gap-4 px-5 py-4 items-center transition-all hover:bg-blue-50/30 ${
-                  !cred.is_active ? "opacity-60" : ""
+                className={`bg-white rounded-2xl border transition-all duration-200 shadow-xs overflow-hidden ${
+                  !cred.is_active ? "border-slate-200 opacity-65 bg-slate-50/50" : "border-slate-200 hover:border-blue-300 hover:shadow-md"
                 }`}
               >
-                {/* Org Name */}
-                <div className="flex items-center space-x-3">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black text-white shrink-0 ${
-                    cred.is_active
-                      ? "bg-gradient-to-br from-[#0052FF] to-[#00C2FF]"
-                      : "bg-gradient-to-br from-slate-400 to-slate-500"
-                  }`}>
-                    {cred.org_name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-slate-900 truncate">{cred.org_name}</p>
-                    {cred.notes && (
-                      <p className="text-[11px] text-slate-400 truncate">{cred.notes}</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Username */}
-                <div className="flex items-center space-x-2 min-w-0">
-                  <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="text-xs font-semibold text-slate-700 truncate font-mono">{cred.portal_username}</span>
-                </div>
-
-                {/* Password */}
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => togglePasswordVisibility(cred.id)}
-                    className="flex items-center space-x-1.5 text-xs text-slate-500 hover:text-[#0052FF] transition-colors cursor-pointer"
-                  >
-                    {visiblePasswords.has(cred.id) ? (
-                      <>
-                        <EyeOff className="w-3.5 h-3.5" />
-                        <span className="font-mono text-[11px]">{cred.portal_password}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Eye className="w-3.5 h-3.5" />
-                        <span className="font-mono text-[11px]">••••••••</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Role Badge & Access Scope */}
-                <div className="flex flex-col items-start gap-1">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                    cred.role === "BRAND_CLIENT"
-                      ? "bg-blue-50 text-[#0052FF] border border-blue-200"
-                      : cred.role === "AGENCY_CLIENT"
-                      ? "bg-purple-50 text-purple-600 border border-purple-200"
-                      : cred.role === "EMPLOYEE"
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : "bg-indigo-50 text-indigo-700 border border-indigo-200"
-                  }`}>
-                    {cred.role === "BRAND_CLIENT" 
-                      ? "Brand" 
-                      : cred.role === "AGENCY_CLIENT" 
-                      ? "Agency" 
-                      : cred.role === "EMPLOYEE" 
-                      ? "Employee" 
-                      : "Analyst"}
-                  </span>
-                  {cred.campaign_access_mode === "SPECIFIC" ? (
-                    <span 
-                      className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-50 text-amber-800 border border-amber-200"
-                      title={cred.assigned_campaign_ids && cred.assigned_campaign_ids.length > 0 ? cred.assigned_campaign_ids.join(", ") : "Specific campaigns assigned"}
+                {/* Mobile Card Header */}
+                <div className="p-4 pb-3 flex items-start justify-between gap-3 border-b border-slate-100">
+                  <div className="flex items-center space-x-3 min-w-0">
+                    {/* Role-colored Avatar */}
+                    <div
+                      className={`w-11 h-11 rounded-xl flex items-center justify-center text-sm font-black text-white shrink-0 shadow-xs ${
+                        !cred.is_active
+                          ? "bg-gradient-to-br from-slate-400 to-slate-500"
+                          : cred.role === "EMPLOYEE"
+                          ? "bg-gradient-to-br from-emerald-500 to-teal-600"
+                          : cred.role === "AGENCY_CLIENT"
+                          ? "bg-gradient-to-br from-purple-500 to-indigo-600"
+                          : cred.role === "PERFORMANCE_ANALYST"
+                          ? "bg-gradient-to-br from-indigo-500 to-blue-600"
+                          : "bg-gradient-to-br from-[#0052FF] to-[#00C2FF]"
+                      }`}
                     >
-                      <Lock className="w-2.5 h-2.5" />
-                      <span>{cred.assigned_campaign_ids?.length || 0} Campaign{(cred.assigned_campaign_ids?.length || 0) === 1 ? "" : "s"}</span>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-100 text-slate-600">
-                      <Globe className="w-2.5 h-2.5 text-slate-400" />
-                      <span>All Campaigns</span>
-                    </span>
-                  )}
-                </div>
+                      {cred.org_name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-black text-slate-900 truncate">{cred.org_name}</h4>
+                      <div className="flex items-center space-x-1.5 mt-1 flex-wrap gap-y-1">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                            cred.role === "BRAND_CLIENT"
+                              ? "bg-blue-50 text-[#0052FF] border border-blue-200"
+                              : cred.role === "AGENCY_CLIENT"
+                              ? "bg-purple-50 text-purple-600 border border-purple-200"
+                              : cred.role === "EMPLOYEE"
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                          }`}
+                        >
+                          {cred.role === "BRAND_CLIENT"
+                            ? "Brand Client"
+                            : cred.role === "AGENCY_CLIENT"
+                            ? "Agency Client"
+                            : cred.role === "EMPLOYEE"
+                            ? "Campaign Employee"
+                            : "Performance Analyst"}
+                        </span>
 
-                {/* Status */}
-                <div className="flex items-center space-x-2">
+                        {cred.campaign_access_mode === "SPECIFIC" ? (
+                          <span
+                            className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200"
+                            title={cred.assigned_campaign_ids?.join(", ") || "Specific campaigns"}
+                          >
+                            <Lock className="w-2.5 h-2.5 text-amber-600" />
+                            <span>{cred.assigned_campaign_ids?.length || 0} Campaign{(cred.assigned_campaign_ids?.length || 0) === 1 ? "" : "s"}</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200/60">
+                            <Globe className="w-2.5 h-2.5 text-slate-400" />
+                            <span>All Campaigns</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Active Toggle Switch */}
                   <button
                     onClick={() => handleToggleActive(cred)}
-                    className="flex items-center space-x-1.5 cursor-pointer group"
-                    title={cred.is_active ? "Click to disable" : "Click to enable"}
+                    className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200/80 transition-all cursor-pointer shrink-0"
+                    title={cred.is_active ? "Active account (Click to disable)" : "Disabled account (Click to activate)"}
                   >
                     {cred.is_active ? (
                       <>
-                        <ToggleRight className="w-5 h-5 text-emerald-500 group-hover:text-emerald-600 transition-colors" />
-                        <span className="text-[11px] font-bold text-emerald-600">Active</span>
+                        <ToggleRight className="w-4 h-4 text-emerald-500" />
+                        <span className="text-[10px] font-extrabold text-emerald-600">Active</span>
                       </>
                     ) : (
                       <>
-                        <ToggleLeft className="w-5 h-5 text-slate-400 group-hover:text-slate-500 transition-colors" />
-                        <span className="text-[11px] font-bold text-slate-400">Disabled</span>
+                        <ToggleLeft className="w-4 h-4 text-slate-400" />
+                        <span className="text-[10px] font-bold text-slate-400">Off</span>
                       </>
                     )}
                   </button>
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center space-x-1.5 flex-wrap">
-                  {/* Quick Copy Credentials Button */}
+                {/* Recessed Credential Pill Box */}
+                <div className="p-3.5 space-y-2 bg-slate-50/70 border-b border-slate-100">
+                  {/* Email / Username Row */}
+                  <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white border border-slate-200/80">
+                    <div className="flex items-center space-x-2 min-w-0">
+                      <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="text-xs font-mono font-medium text-slate-800 truncate">{cred.portal_username}</span>
+                    </div>
+                    <button
+                      onClick={() => copyToClipboard(cred.portal_username, `user-${cred.id}`)}
+                      className="p-1 rounded-md text-slate-400 hover:text-[#0052FF] hover:bg-blue-50 transition-colors shrink-0 cursor-pointer"
+                      title="Copy username"
+                    >
+                      {copiedId === `user-${cred.id}` ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-500" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Password Row with Eye Reveal & Copy */}
+                  <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white border border-slate-200/80">
+                    <div className="flex items-center space-x-2 min-w-0">
+                      <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="text-xs font-mono font-semibold text-slate-800 truncate">
+                        {visiblePasswords.has(cred.id) ? cred.portal_password : "••••••••••••"}
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-1 shrink-0">
+                      <button
+                        onClick={() => togglePasswordVisibility(cred.id)}
+                        className="p-1 rounded-md text-slate-400 hover:text-[#0052FF] hover:bg-blue-50 transition-colors cursor-pointer"
+                        title={visiblePasswords.has(cred.id) ? "Hide password" : "Show password"}
+                      >
+                        {visiblePasswords.has(cred.id) ? (
+                          <EyeOff className="w-3.5 h-3.5" />
+                        ) : (
+                          <Eye className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => copyToClipboard(cred.portal_password, `pwd-${cred.id}`)}
+                        className="p-1 rounded-md text-slate-400 hover:text-[#0052FF] hover:bg-blue-50 transition-colors cursor-pointer"
+                        title="Copy password"
+                      >
+                        {copiedId === `pwd-${cred.id}` ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-500" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Notes if present */}
+                  {cred.notes && (
+                    <p className="text-[11px] text-slate-500 italic px-1 truncate">
+                      📝 {cred.notes}
+                    </p>
+                  )}
+                </div>
+
+                {/* Mobile Card Action Toolbar */}
+                <div className="p-3 bg-white flex items-center justify-between gap-1.5">
                   <button
                     onClick={() => handleCopyRoleCredentials(cred)}
-                    className="p-2 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-[#0052FF] transition-all cursor-pointer"
-                    title="Copy full credentials to clipboard"
+                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#0052FF] text-xs font-bold transition-colors cursor-pointer"
                   >
                     {copiedId === cred.id ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="text-emerald-700">Copied!</span>
+                      </>
                     ) : (
-                      <Copy className="w-3.5 h-3.5" />
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy Login</span>
+                      </>
                     )}
                   </button>
 
-                  {/* Quick Update Password Button */}
-                  <button
-                    onClick={() => openQuickResetModal(cred)}
-                    className="p-2 rounded-lg hover:bg-amber-50 text-slate-400 hover:text-amber-600 transition-all cursor-pointer"
-                    title="Quick change / update password"
-                  >
-                    <KeyRound className="w-3.5 h-3.5" />
-                  </button>
-
-                  <button
-                    onClick={() => openEditDrawer(cred)}
-                    className="p-2 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-[#0052FF] transition-all cursor-pointer"
-                    title="Edit credential details and access scope"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-
-                  {deleteTarget === cred.id ? (
-                    <div className="flex items-center space-x-1 animate-in fade-in slide-in-from-right-2 duration-150">
-                      <button
-                        onClick={() => handleDelete(cred.id)}
-                        className="px-2 py-1 rounded-lg bg-red-500 hover:bg-red-600 text-white text-[10px] font-bold cursor-pointer transition-all"
-                      >
-                        Confirm
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(null)}
-                        className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold cursor-pointer transition-all"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
+                  <div className="flex items-center space-x-1">
                     <button
-                      onClick={() => setDeleteTarget(cred.id)}
-                      className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all cursor-pointer"
-                      title="Delete credential"
+                      onClick={() => openQuickResetModal(cred)}
+                      className="p-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold transition-colors cursor-pointer"
+                      title="Reset Password"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <KeyRound className="w-3.5 h-3.5" />
                     </button>
-                  )}
+
+                    <button
+                      onClick={() => openEditDrawer(cred)}
+                      className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                      title="Edit Credential"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+
+                    {deleteTarget === cred.id ? (
+                      <div className="flex items-center space-x-1 animate-in fade-in duration-150">
+                        <button
+                          onClick={() => handleDelete(cred.id)}
+                          className="px-2 py-1.5 rounded-lg bg-red-600 text-white text-[11px] font-bold cursor-pointer"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(null)}
+                          className="px-2 py-1.5 rounded-lg bg-slate-200 text-slate-700 text-[11px] font-bold cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setDeleteTarget(cred.id)}
+                        className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold transition-colors cursor-pointer"
+                        title="Delete Credential"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* ── DESKTOP VIEW: Dense, Spreadsheet Data Table (visible on >= lg) ── */}
+          <div className="hidden lg:block bg-white border border-slate-200 shadow-xs rounded-2xl overflow-hidden">
+            {/* Table Header */}
+            <div className="grid grid-cols-[1.5fr_1.5fr_0.8fr_0.7fr_1fr_auto] gap-4 px-5 py-3 border-b border-slate-200 bg-slate-100 text-slate-700 font-extrabold uppercase text-[11px]">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Organization</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Username / Email</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Password</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Role & Scope</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Status</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Actions</span>
+            </div>
+
+            {/* Table Rows */}
+            <div className="divide-y divide-slate-100">
+              {filteredCredentials.map((cred) => (
+                <div
+                  key={cred.id}
+                  className={`grid grid-cols-[1.5fr_1.5fr_0.8fr_0.7fr_1fr_auto] gap-4 px-5 py-4 items-center transition-all hover:bg-blue-50/30 ${
+                    !cred.is_active ? "opacity-60" : ""
+                  }`}
+                >
+                  {/* Org Name */}
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black text-white shrink-0 ${
+                      cred.is_active
+                        ? "bg-gradient-to-br from-[#0052FF] to-[#00C2FF]"
+                        : "bg-gradient-to-br from-slate-400 to-slate-500"
+                    }`}>
+                      {cred.org_name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-900 truncate">{cred.org_name}</p>
+                      {cred.notes && (
+                        <p className="text-[11px] text-slate-400 truncate">{cred.notes}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Username */}
+                  <div className="flex items-center space-x-2 min-w-0">
+                    <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="text-xs font-semibold text-slate-700 truncate font-mono">{cred.portal_username}</span>
+                  </div>
+
+                  {/* Password */}
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => togglePasswordVisibility(cred.id)}
+                      className="flex items-center space-x-1.5 text-xs text-slate-500 hover:text-[#0052FF] transition-colors cursor-pointer"
+                    >
+                      {visiblePasswords.has(cred.id) ? (
+                        <>
+                          <EyeOff className="w-3.5 h-3.5" />
+                          <span className="font-mono text-[11px]">{cred.portal_password}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="w-3.5 h-3.5" />
+                          <span className="font-mono text-[11px]">••••••••</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Role Badge & Access Scope */}
+                  <div className="flex flex-col items-start gap-1">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                      cred.role === "BRAND_CLIENT"
+                        ? "bg-blue-50 text-[#0052FF] border border-blue-200"
+                        : cred.role === "AGENCY_CLIENT"
+                        ? "bg-purple-50 text-purple-600 border border-purple-200"
+                        : cred.role === "EMPLOYEE"
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                    }`}>
+                      {cred.role === "BRAND_CLIENT" 
+                        ? "Brand" 
+                        : cred.role === "AGENCY_CLIENT" 
+                        ? "Agency" 
+                        : cred.role === "EMPLOYEE" 
+                        ? "Employee" 
+                        : "Analyst"}
+                    </span>
+                    {cred.campaign_access_mode === "SPECIFIC" ? (
+                      <span 
+                        className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-50 text-amber-800 border border-amber-200"
+                        title={cred.assigned_campaign_ids && cred.assigned_campaign_ids.length > 0 ? cred.assigned_campaign_ids.join(", ") : "Specific campaigns assigned"}
+                      >
+                        <Lock className="w-2.5 h-2.5" />
+                        <span>{cred.assigned_campaign_ids?.length || 0} Campaign{(cred.assigned_campaign_ids?.length || 0) === 1 ? "" : "s"}</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-100 text-slate-600">
+                        <Globe className="w-2.5 h-2.5 text-slate-400" />
+                        <span>All Campaigns</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Status */}
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleToggleActive(cred)}
+                      className="flex items-center space-x-1.5 cursor-pointer group"
+                      title={cred.is_active ? "Click to disable" : "Click to enable"}
+                    >
+                      {cred.is_active ? (
+                        <>
+                          <ToggleRight className="w-5 h-5 text-emerald-500 group-hover:text-emerald-600 transition-colors" />
+                          <span className="text-[11px] font-bold text-emerald-600">Active</span>
+                        </>
+                      ) : (
+                        <>
+                          <ToggleLeft className="w-5 h-5 text-slate-400 group-hover:text-slate-500 transition-colors" />
+                          <span className="text-[11px] font-bold text-slate-400">Disabled</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center space-x-1.5 flex-wrap">
+                    {/* Quick Copy Credentials Button */}
+                    <button
+                      onClick={() => handleCopyRoleCredentials(cred)}
+                      className="p-2 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-[#0052FF] transition-all cursor-pointer"
+                      title="Copy full credentials to clipboard"
+                    >
+                      {copiedId === cred.id ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-500" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+
+                    {/* Quick Update Password Button */}
+                    <button
+                      onClick={() => openQuickResetModal(cred)}
+                      className="p-2 rounded-lg hover:bg-amber-50 text-slate-400 hover:text-amber-600 transition-all cursor-pointer"
+                      title="Quick change / update password"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      onClick={() => openEditDrawer(cred)}
+                      className="p-2 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-[#0052FF] transition-all cursor-pointer"
+                      title="Edit credential details and access scope"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+
+                    {deleteTarget === cred.id ? (
+                      <div className="flex items-center space-x-1 animate-in fade-in slide-in-from-right-2 duration-150">
+                        <button
+                          onClick={() => handleDelete(cred.id)}
+                          className="px-2 py-1 rounded-lg bg-red-500 hover:bg-red-600 text-white text-[10px] font-bold cursor-pointer transition-all"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(null)}
+                          className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold cursor-pointer transition-all"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setDeleteTarget(cred.id)}
+                        className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all cursor-pointer"
+                        title="Delete credential"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -959,6 +1180,56 @@ const CredentialDrawer: React.FC<DrawerProps> = ({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Comprehensive employee list derived from executionOwners, campaigns, and known sheet POCs
+  const effectiveEmployeeList = useMemo(() => {
+    const set = new Set<string>();
+
+    (executionOwners || []).forEach((o) => {
+      const trimmed = (o || "").trim();
+      if (
+        trimmed &&
+        !["all ops leads", "team xcelerate", "n/a", "unassigned"].includes(
+          trimmed.toLowerCase()
+        )
+      ) {
+        set.add(trimmed);
+      }
+    });
+
+    (campaigns || []).forEach((c) => {
+      if (c.xcelerate_poc) {
+        const trimmed = c.xcelerate_poc.trim();
+        if (
+          trimmed &&
+          !["all ops leads", "team xcelerate", "n/a", "unassigned"].includes(
+            trimmed.toLowerCase()
+          )
+        ) {
+          set.add(trimmed);
+        }
+      }
+      if (c.execution_owners && Array.isArray(c.execution_owners)) {
+        c.execution_owners.forEach((o) => {
+          const trimmed = (o || "").trim();
+          if (
+            trimmed &&
+            !["all ops leads", "team xcelerate", "n/a", "unassigned"].includes(
+              trimmed.toLowerCase()
+            )
+          ) {
+            set.add(trimmed);
+          }
+        });
+      }
+    });
+
+    if (!set.has("Payal")) {
+      set.add("Payal");
+    }
+
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [executionOwners, campaigns]);
+
   const currentOrg = orgName === "__custom__" ? customOrg.trim() : orgName;
 
   // Filter campaigns available for selection (strictly scoped to this client's organization)
@@ -971,14 +1242,15 @@ const CredentialDrawer: React.FC<DrawerProps> = ({
       if (showAllOrgsCampaigns) return campaigns;
       // Find campaigns where this employee is execution_owner or xcelerate_poc
       const matching = campaigns.filter(c => 
-        (c.execution_owners && c.execution_owners.some(o => o.toLowerCase() === currentOrg.toLowerCase())) ||
-        c.xcelerate_poc.toLowerCase() === currentOrg.toLowerCase()
+        (c.execution_owners && c.execution_owners.some(o => (o || "").toLowerCase() === currentOrg.toLowerCase())) ||
+        ((c.xcelerate_poc || "").toLowerCase() === currentOrg.toLowerCase())
       );
-      return matching;
+      // Return matching campaigns, or fallback to all campaigns if no initial matches so admin can assign any campaign!
+      return matching.length > 0 ? matching : campaigns;
     }
 
     // For brand/agency: strictly return campaigns matching this client organization only (NEVER fall back to all campaigns!)
-    const matching = campaigns.filter(c => c.org_name.toLowerCase() === currentOrg.toLowerCase());
+    const matching = campaigns.filter(c => (c.org_name || "").toLowerCase() === currentOrg.toLowerCase());
     return matching;
   }, [campaigns, currentOrg, showAllOrgsCampaigns, role]);
 
@@ -987,12 +1259,12 @@ const CredentialDrawer: React.FC<DrawerProps> = ({
     const q = campaignSearch.toLowerCase().trim();
     if (!q) return availableCampaigns;
     return availableCampaigns.filter(c => {
-      const matchName = c.campaign_name.toLowerCase().includes(q);
-      const matchMonth = c.campaign_month.toLowerCase().includes(q);
-      const matchOrg = c.org_name.toLowerCase().includes(q);
-      const matchId = c.id.toLowerCase().includes(q);
-      const matchLeads = c.execution_owners?.some(o => o.toLowerCase().includes(q));
-      const matchPoc = c.xcelerate_poc.toLowerCase().includes(q);
+      const matchName = (c.campaign_name || "").toLowerCase().includes(q);
+      const matchMonth = (c.campaign_month || "").toLowerCase().includes(q);
+      const matchOrg = (c.org_name || "").toLowerCase().includes(q);
+      const matchId = (c.id || "").toLowerCase().includes(q);
+      const matchLeads = c.execution_owners?.some(o => (o || "").toLowerCase().includes(q));
+      const matchPoc = (c.xcelerate_poc || "").toLowerCase().includes(q);
       return matchName || matchMonth || matchOrg || matchId || matchLeads || matchPoc;
     });
   }, [availableCampaigns, campaignSearch]);
@@ -1136,7 +1408,7 @@ const CredentialDrawer: React.FC<DrawerProps> = ({
                 onClick={() => {
                   setRole("EMPLOYEE");
                   if (!editingCredential) {
-                    const defaultOwner = executionOwners[0] || "";
+                    const defaultOwner = effectiveEmployeeList[0] || "Payal";
                     setOrgName(defaultOwner);
                     if (defaultOwner) {
                       const slug = defaultOwner.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -1256,8 +1528,8 @@ const CredentialDrawer: React.FC<DrawerProps> = ({
                 {isOrgDropdownOpen && (
                   <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-[70] overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
                     {role === "EMPLOYEE" ? (
-                      executionOwners.length > 0 ? (
-                        executionOwners.map((owner) => (
+                      effectiveEmployeeList.length > 0 ? (
+                        effectiveEmployeeList.map((owner) => (
                           <button
                             key={owner}
                             onClick={() => { 
