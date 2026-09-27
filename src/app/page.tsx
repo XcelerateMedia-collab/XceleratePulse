@@ -459,6 +459,7 @@ export default function Home() {
             <ExecutiveKpis
               deliverables={deliverables}
               isInternal={isInternal}
+              role={role}
               campaignName={activeDisplayTitle}
             />
 

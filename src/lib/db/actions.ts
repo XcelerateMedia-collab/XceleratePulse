@@ -144,12 +144,30 @@ function mapRowToDeliverable(r: any): CreatorDeliverableInternal {
     screenshots: String(r.screenshots || "[]"),
     day7_views: Number(r.day7_views || 0),
     day7_er: Number(r.day7_er || 0),
+    day7_reach: Number(r.day7_reach || 0),
+    day7_likes: Number(r.day7_likes || 0),
+    day7_comments: Number(r.day7_comments || 0),
+    day7_saves: Number(r.day7_saves || 0),
+    day7_shares: Number(r.day7_shares || 0),
+    day7_avg_watch_time: r.day7_avg_watch_time ? String(r.day7_avg_watch_time) : undefined,
     day7_screenshot: r.day7_screenshot ? String(r.day7_screenshot) : undefined,
     day15_views: Number(r.day15_views || 0),
     day15_er: Number(r.day15_er || 0),
+    day15_reach: Number(r.day15_reach || 0),
+    day15_likes: Number(r.day15_likes || 0),
+    day15_comments: Number(r.day15_comments || 0),
+    day15_saves: Number(r.day15_saves || 0),
+    day15_shares: Number(r.day15_shares || 0),
+    day15_avg_watch_time: r.day15_avg_watch_time ? String(r.day15_avg_watch_time) : undefined,
     day15_screenshot: r.day15_screenshot ? String(r.day15_screenshot) : undefined,
     day30_views: Number(r.day30_views || 0),
     day30_er: Number(r.day30_er || 0),
+    day30_reach: Number(r.day30_reach || 0),
+    day30_likes: Number(r.day30_likes || 0),
+    day30_comments: Number(r.day30_comments || 0),
+    day30_saves: Number(r.day30_saves || 0),
+    day30_shares: Number(r.day30_shares || 0),
+    day30_avg_watch_time: r.day30_avg_watch_time ? String(r.day30_avg_watch_time) : undefined,
     day30_screenshot: r.day30_screenshot ? String(r.day30_screenshot) : undefined,
     execution_owner: r.execution_owner ? String(r.execution_owner) : undefined,
     brief_name: r.brief_name ? String(r.brief_name) : undefined,
@@ -188,7 +206,8 @@ export async function getCampaignDeliverables(
   isInternal: boolean;
 }> {
   await initDatabase();
-  const isInternal = role === "SUPER_ADMIN" || role === "INTERNAL_OPS" || role === "EMPLOYEE" || role === "PERFORMANCE_ANALYST";
+  const isFinancialAdmin = role === "SUPER_ADMIN" || role === "INTERNAL_OPS";
+  const isInternal = isFinancialAdmin;
 
   // Handle "ALL" option to view all campaigns and creators consolidated
   if (campaignId === "ALL" || !campaignId) {
@@ -196,7 +215,7 @@ export async function getCampaignDeliverables(
       id: "ALL",
       campaign_month: "All Months",
       client_type: "Brand",
-      org_name: isInternal ? "All Organizations" : orgName,
+      org_name: (isFinancialAdmin || role === "PERFORMANCE_ANALYST") ? "All Organizations" : orgName,
       campaign_name: "All Campaigns (Consolidated Overview)",
       xcelerate_poc: "All Leads",
       brand_agency_poc: "All Leads",
@@ -234,13 +253,13 @@ export async function getCampaignDeliverables(
         delivArgs.push(...assignedCampaignIds);
       }
     }
-    // PERFORMANCE_ANALYST sees everything (same as SUPER_ADMIN)
+    // PERFORMANCE_ANALYST sees all creators across campaigns without confidential commercials
 
     delivSql += ` ORDER BY d.updated_at DESC, d.followers_count DESC`;
     const delivResult = await db.execute({ sql: delivSql, args: delivArgs });
     const rawDeliverables = delivResult.rows.map(mapRowToDeliverable);
 
-    const sanitizedDeliverables = isInternal
+    const sanitizedDeliverables = isFinancialAdmin
       ? rawDeliverables
       : rawDeliverables.map(sanitizeForBrand);
 
@@ -422,6 +441,51 @@ export async function updateDeliverableWithAutomation(
   const { updated, automationsApplied: cascadeLogs } = applySmartStatusCascades(merged);
   automationsApplied.push(...cascadeLogs);
 
+  // 4b. Auto-reflect milestone metrics into overall performance if updating milestone
+  const has30d = Number(merged.day30_views || 0) > 0 || Number(merged.day30_er || 0) > 0;
+  const has15d = Number(merged.day15_views || 0) > 0 || Number(merged.day15_er || 0) > 0;
+  const has7d = Number(merged.day7_views || 0) > 0 || Number(merged.day7_er || 0) > 0;
+
+  const isUpdatingMilestone = (
+    partialUpdates.day30_views !== undefined ||
+    partialUpdates.day15_views !== undefined ||
+    partialUpdates.day7_views !== undefined
+  );
+
+  if (isUpdatingMilestone && partialUpdates.total_views === undefined) {
+    if (has30d && partialUpdates.day30_views !== undefined) {
+      merged.total_views = Number(merged.day30_views || 0);
+      merged.engagement_rate = Number(merged.day30_er || 0);
+      if (merged.day30_reach) merged.account_reach = Number(merged.day30_reach);
+      if (merged.day30_likes) merged.likes = Number(merged.day30_likes);
+      if (merged.day30_comments) merged.comments = Number(merged.day30_comments);
+      if (merged.day30_saves) merged.saves = Number(merged.day30_saves);
+      if (merged.day30_shares) merged.shares = Number(merged.day30_shares);
+      if (merged.day30_avg_watch_time) merged.avg_watch_time = String(merged.day30_avg_watch_time);
+      automationsApplied.push("Reflected Day 30 metrics to Overall Performance");
+    } else if (has15d && partialUpdates.day15_views !== undefined) {
+      merged.total_views = Number(merged.day15_views || 0);
+      merged.engagement_rate = Number(merged.day15_er || 0);
+      if (merged.day15_reach) merged.account_reach = Number(merged.day15_reach);
+      if (merged.day15_likes) merged.likes = Number(merged.day15_likes);
+      if (merged.day15_comments) merged.comments = Number(merged.day15_comments);
+      if (merged.day15_saves) merged.saves = Number(merged.day15_saves);
+      if (merged.day15_shares) merged.shares = Number(merged.day15_shares);
+      if (merged.day15_avg_watch_time) merged.avg_watch_time = String(merged.day15_avg_watch_time);
+      automationsApplied.push("Reflected Day 15 metrics to Overall Performance");
+    } else if (has7d && partialUpdates.day7_views !== undefined) {
+      merged.total_views = Number(merged.day7_views || 0);
+      merged.engagement_rate = Number(merged.day7_er || 0);
+      if (merged.day7_reach) merged.account_reach = Number(merged.day7_reach);
+      if (merged.day7_likes) merged.likes = Number(merged.day7_likes);
+      if (merged.day7_comments) merged.comments = Number(merged.day7_comments);
+      if (merged.day7_saves) merged.saves = Number(merged.day7_saves);
+      if (merged.day7_shares) merged.shares = Number(merged.day7_shares);
+      if (merged.day7_avg_watch_time) merged.avg_watch_time = String(merged.day7_avg_watch_time);
+      automationsApplied.push("Reflected Day 7 metrics to Overall Performance");
+    }
+  }
+
   // 5. Update Turso
   await db.execute({
     sql: `UPDATE campaign_creators SET
@@ -448,12 +512,30 @@ export async function updateDeliverableWithAutomation(
       screenshots = ?,
       day7_views = ?,
       day7_er = ?,
+      day7_reach = ?,
+      day7_likes = ?,
+      day7_comments = ?,
+      day7_saves = ?,
+      day7_shares = ?,
+      day7_avg_watch_time = ?,
       day7_screenshot = ?,
       day15_views = ?,
       day15_er = ?,
+      day15_reach = ?,
+      day15_likes = ?,
+      day15_comments = ?,
+      day15_saves = ?,
+      day15_shares = ?,
+      day15_avg_watch_time = ?,
       day15_screenshot = ?,
       day30_views = ?,
       day30_er = ?,
+      day30_reach = ?,
+      day30_likes = ?,
+      day30_comments = ?,
+      day30_saves = ?,
+      day30_shares = ?,
+      day30_avg_watch_time = ?,
       day30_screenshot = ?,
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ?`,
@@ -481,12 +563,30 @@ export async function updateDeliverableWithAutomation(
       typeof updated.screenshots === "string" ? updated.screenshots : JSON.stringify(updated.screenshots || []),
       Number(updated.day7_views || 0),
       Number(updated.day7_er || 0),
+      Number(updated.day7_reach || 0),
+      Number(updated.day7_likes || 0),
+      Number(updated.day7_comments || 0),
+      Number(updated.day7_saves || 0),
+      Number(updated.day7_shares || 0),
+      String(updated.day7_avg_watch_time || ""),
       String(updated.day7_screenshot || ""),
       Number(updated.day15_views || 0),
       Number(updated.day15_er || 0),
+      Number(updated.day15_reach || 0),
+      Number(updated.day15_likes || 0),
+      Number(updated.day15_comments || 0),
+      Number(updated.day15_saves || 0),
+      Number(updated.day15_shares || 0),
+      String(updated.day15_avg_watch_time || ""),
       String(updated.day15_screenshot || ""),
       Number(updated.day30_views || 0),
       Number(updated.day30_er || 0),
+      Number(updated.day30_reach || 0),
+      Number(updated.day30_likes || 0),
+      Number(updated.day30_comments || 0),
+      Number(updated.day30_saves || 0),
+      Number(updated.day30_shares || 0),
+      String(updated.day30_avg_watch_time || ""),
       String(updated.day30_screenshot || ""),
       deliverableId,
     ],

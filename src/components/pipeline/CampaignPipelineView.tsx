@@ -903,6 +903,7 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
   };
 
   const formatCurrency = (val: number) => "₹" + val.toLocaleString("en-IN");
+  const formatNumber = (num: number) => (!num || num <= 0 ? "0" : num.toLocaleString("en-IN"));
 
   /**
    * Strips all time and timestamp components (e.g., T18:30:00.000Z or 18:30:00) so ONLY the date is displayed.
@@ -1173,6 +1174,12 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                     <th className="py-3 px-3 min-w-[95px] text-[#0052FF] font-bold">Gross Margin</th>
                     <th className="py-3 px-3 min-w-[100px] text-slate-700">Phone</th>
                   </>
+                ) : isPerformanceAnalyst ? (
+                  <>
+                    <th className="py-3 px-3 min-w-[90px] text-[#0052FF] font-bold">Total Views</th>
+                    <th className="py-3 px-3 min-w-[80px] text-emerald-600 font-bold">ER (%)</th>
+                    <th className="py-3 px-3 min-w-[90px] text-slate-700 font-bold">Reach</th>
+                  </>
                 ) : (
                   <th 
                     className="py-3 px-3 min-w-[95px] text-slate-700 cursor-pointer hover:text-slate-900 select-none"
@@ -1441,7 +1448,7 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                       {getExecutionBadge(item)}
                     </td>
 
-                    {/* Commercials (Role-Gated) */}
+                    {/* Commercials or Performance Metrics (Role-Gated) */}
                     {isInternal ? (
                       <>
                         <td className="py-3 px-3 font-semibold text-slate-800 align-middle">
@@ -1460,6 +1467,18 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                         </td>
                         <td className="py-3 px-3 text-[11px] text-slate-700 font-medium whitespace-nowrap align-middle">
                           {internalItem.phone_number || "—"}
+                        </td>
+                      </>
+                    ) : isPerformanceAnalyst ? (
+                      <>
+                        <td className="py-3 px-3 font-extrabold text-slate-900 align-middle">
+                          {formatNumber(item.total_views || 0)}
+                        </td>
+                        <td className="py-3 px-3 font-extrabold text-emerald-600 align-middle">
+                          {item.engagement_rate || 0}%
+                        </td>
+                        <td className="py-3 px-3 font-semibold text-slate-700 align-middle">
+                          {formatNumber(item.account_reach || 0)}
                         </td>
                       </>
                     ) : (
@@ -1883,7 +1902,12 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                   {/* Footer Action Strip */}
                   <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
                     <span className="text-[11px] font-bold text-slate-500">
-                      {isInternal ? `Gross Margin: ${formatCurrency(internalItem.gross_margin || 0)}` : `Budget: ${formatCurrency(item.brand_cost || 0)}`}
+                      {isInternal 
+                        ? `Gross Margin: ${formatCurrency(internalItem.gross_margin || 0)}` 
+                        : isPerformanceAnalyst 
+                        ? `Performance: ${formatNumber(item.total_views || 0)} Views • ${item.engagement_rate || 0}% ER`
+                        : `Budget: ${formatCurrency(item.brand_cost || 0)}`
+                      }
                     </span>
                     <div className="flex items-center space-x-1 text-[#0052FF] font-bold text-xs">
                       <span>View Full Details</span>

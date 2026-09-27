@@ -13,17 +13,19 @@ import {
   PieChart,
   Sparkles
 } from "lucide-react";
-import { CreatorDeliverableBrandView, CreatorDeliverableInternal } from "@/lib/types";
+import { CreatorDeliverableBrandView, CreatorDeliverableInternal, Role } from "@/lib/types";
 
 interface ExecutiveKpisProps {
   deliverables: (CreatorDeliverableBrandView | CreatorDeliverableInternal)[];
   isInternal: boolean;
+  role?: Role;
   campaignName: string;
 }
 
 export const ExecutiveKpis: React.FC<ExecutiveKpisProps> = React.memo(({
   deliverables,
   isInternal,
+  role,
   campaignName,
 }) => {
   const {
@@ -151,6 +153,12 @@ export const ExecutiveKpis: React.FC<ExecutiveKpisProps> = React.memo(({
             <span className="hidden sm:inline">Xcelerate Ops • Internal Financials Unmasked</span>
             <span className="sm:hidden">Internal Financials Unmasked</span>
           </div>
+        ) : role === "PERFORMANCE_ANALYST" ? (
+          <div className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-xs font-semibold self-start sm:self-auto shrink-0">
+            <Sparkles className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+            <span className="hidden sm:inline">Performance Analyst Session • Live Metrics Editor & Tracking</span>
+            <span className="sm:hidden">Metrics Tracking Active</span>
+          </div>
         ) : (
           <div className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold self-start sm:self-auto shrink-0">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
@@ -258,7 +266,7 @@ export const ExecutiveKpis: React.FC<ExecutiveKpisProps> = React.memo(({
           </div>
         </div>
 
-        {/* Commercials: Brand Spend or Margin */}
+        {/* Commercials or Operational KPI: Strictly Hide Margins from Performance Analyst */}
         {isInternal ? (
           <div className="p-4 rounded-2xl bg-white border-2 border-blue-200 shadow-xs hover:shadow-md transition-all relative overflow-hidden">
             <div className="flex items-center justify-between text-[#0052FF] text-xs font-bold uppercase tracking-wider mb-2">
@@ -272,6 +280,25 @@ export const ExecutiveKpis: React.FC<ExecutiveKpisProps> = React.memo(({
             </div>
             <div className="text-[11px] text-slate-700 font-bold mt-1">
               {marginPct}% Margin ({formatCurrency(totalBrandCost)} Rev)
+            </div>
+          </div>
+        ) : role === "PERFORMANCE_ANALYST" ? (
+          <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-md hover:border-purple-300 transition-all relative overflow-hidden group">
+            <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">
+              <span>Total Interactions</span>
+              <div className="p-1.5 rounded-lg bg-purple-50 text-purple-600 border border-purple-100">
+                <HeartHandshake className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="text-2xl font-black text-slate-900 tracking-tight">
+              {formatNumber(totalEngagements)}
+            </div>
+            <div className="text-[11px] text-slate-500 font-medium mt-1">
+              {totalEngagements > 0 ? (
+                <span>{formatNumber(totalLikes)} likes • {formatNumber(totalComments)} comments</span>
+              ) : (
+                <span className="text-slate-400">Likes, saves &amp; shares</span>
+              )}
             </div>
           </div>
         ) : (

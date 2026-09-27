@@ -92,12 +92,30 @@ export interface CreatorDeliverableInternal {
   // Milestones
   day7_views: number;
   day7_er: number;
+  day7_reach?: number;
+  day7_likes?: number;
+  day7_comments?: number;
+  day7_saves?: number;
+  day7_shares?: number;
+  day7_avg_watch_time?: string;
   day7_screenshot?: string;
   day15_views: number;
   day15_er: number;
+  day15_reach?: number;
+  day15_likes?: number;
+  day15_comments?: number;
+  day15_saves?: number;
+  day15_shares?: number;
+  day15_avg_watch_time?: string;
   day15_screenshot?: string;
   day30_views: number;
   day30_er: number;
+  day30_reach?: number;
+  day30_likes?: number;
+  day30_comments?: number;
+  day30_saves?: number;
+  day30_shares?: number;
+  day30_avg_watch_time?: string;
   day30_screenshot?: string;
   // Employee Execution & Invoicing Fields
   execution_owner?: string;
