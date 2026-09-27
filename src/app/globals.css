@@ -1,26 +1,153 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg-main: #F1F5F9;
+    --bg-surface: #FFFFFF;
+    --bg-surface-elevated: #FFFFFF;
+    --border-subtle: #E2E8F0;
+    --border-active: #0052FF;
+    --text-primary: #0F172A;
+    --text-secondary: #334155;
+    --text-muted: #64748B;
+    
+    /* Xcelerate Media Brand Palette (extracted from logo) */
+    --brand-blue: #0052FF;
+    --brand-cyan: #00B4FF;
+    --brand-royal: #0B132B;
+    --brand-gradient: linear-gradient(135deg, #0052FF 0%, #0066FF 45%, #00C2FF 100%);
+    --brand-glow: rgba(0, 82, 255, 0.16);
+  }
+
+  body {
+    background-color: var(--bg-main);
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(0, 82, 255, 0.05) 0%, transparent 55%),
+      radial-gradient(circle at 100% 20%, rgba(0, 194, 255, 0.04) 0%, transparent 45%);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Premium Light Studio Surface Card (Solid White with Defined Border & Shadow) */
+.glass-panel-light {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  box-shadow: 
+    0 1px 3px 0 rgba(15, 23, 42, 0.05),
+    0 3px 12px -2px rgba(15, 23, 42, 0.04);
 }
+
+.glass-panel-light-hover:hover {
+  border-color: #CBD5E1;
+  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.08);
+}
+
+/* Glowing Button */
+.btn-cinematic-blue {
+  background: var(--brand-gradient);
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(0, 102, 255, 0.25);
+}
+
+.live-indicator-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #0052FF;
+}
+
+/* Custom Refined Floating Scrollbar (Never cuts rounded corners) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+  margin-block: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 82, 255, 0.6);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+/* Modal Inner Scroll Area (Scrollbar strictly contained inside, padded from corners) */
+.custom-modal-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+.custom-modal-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-modal-scroll::-webkit-scrollbar-track {
+  background: transparent;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+.custom-modal-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 9999px;
+}
+.custom-modal-scroll::-webkit-scrollbar-thumb:hover {
+  background: #0052FF;
+}
+
+/* Drawer Overlay — Fast, solid high-contrast backdrop without GPU blur lag */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.7);
+  z-index: 60;
+}
+
+/* Drawer Panel — Instant display without animation delay */
+.drawer-panel {
+  position: relative;
+  width: 100%;
+  max-width: 28rem;
+  height: 100vh;
+  max-height: 100vh;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -20px 0 60px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+/* Anti-clipping: Ensure dropdowns inside drawers render above everything */
+.dropdown-portal {
+  position: fixed;
+  z-index: 70;
+}
+
+/* Zero-delay instant rendering: completely eliminate all transition, animation, and blur latency */
+*, *::before, *::after {
+  transition: none !important;
+  animation: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Retain only spinning loader icon when actively synchronizing */
+.animate-spin {
+  animation: spin 0.8s linear infinite !important;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
