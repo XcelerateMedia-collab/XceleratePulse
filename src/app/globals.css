@@ -103,6 +103,17 @@
   background: #0052FF;
 }
 
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+
 /* Drawer Overlay — Fast, solid high-contrast backdrop without GPU blur lag */
 .drawer-overlay {
   position: fixed;

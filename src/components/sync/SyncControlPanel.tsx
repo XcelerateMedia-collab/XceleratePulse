@@ -940,13 +940,13 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
         </div>
 
         {/* Subtab Navigation */}
-        <div className="flex items-center space-x-2 mt-5 pt-4 border-t border-white/10">
+        <div className="flex items-center gap-2 mt-5 pt-4 border-t border-white/10 overflow-x-auto no-scrollbar scroll-smooth pb-1.5 -mx-1 px-1">
           <button
             onClick={() => setPanelTab("actions")}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               panelTab === "actions"
-                ? "bg-white text-slate-900 shadow-xs"
-                : "text-slate-300 hover:text-white hover:bg-white/5"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5"
             }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -955,10 +955,10 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
 
           <button
             onClick={() => setPanelTab("logs")}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               panelTab === "logs"
-                ? "bg-white text-slate-900 shadow-xs"
-                : "text-slate-300 hover:text-white hover:bg-white/5"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5"
             }`}
           >
             <Activity className="w-3.5 h-3.5 text-emerald-400" />
@@ -970,10 +970,10 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
 
           <button
             onClick={() => setPanelTab("registry")}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               panelTab === "registry"
-                ? "bg-white text-slate-900 shadow-xs"
-                : "text-slate-300 hover:text-white hover:bg-white/5"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5"
             }`}
           >
             <Users className="w-3.5 h-3.5" />
@@ -982,10 +982,10 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
 
           <button
             onClick={() => setPanelTab("settings")}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               panelTab === "settings"
-                ? "bg-white text-slate-900 shadow-xs"
-                : "text-slate-300 hover:text-white hover:bg-white/5"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5"
             }`}
           >
             <Link2 className="w-3.5 h-3.5" />
@@ -999,10 +999,10 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
 
           <button
             onClick={() => setPanelTab("cleanup")}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               panelTab === "cleanup"
-                ? "bg-white text-slate-900 shadow-xs"
-                : "text-slate-300 hover:text-white hover:bg-white/5"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5"
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
@@ -1015,47 +1015,53 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
       {(activeAction !== null || isPruning) && (
         <div className="p-4 md:p-5 rounded-2xl bg-gradient-to-r from-slate-950 via-blue-950 to-indigo-950 text-white border-2 border-blue-400/60 shadow-2xl space-y-3.5 animate-fadeIn">
           {/* Top Row: Title, Stage & Telemetry Badges */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center space-x-3.5">
-              <div className="relative">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div className="flex items-center space-x-3.5 min-w-0">
+              <div className="relative shrink-0">
                 <RefreshCw className="w-5 h-5 text-cyan-300 animate-spin" />
                 <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
               </div>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-500/30 text-blue-300 border border-blue-400/40">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-500/30 text-blue-300 border border-blue-400/40 shrink-0">
                     Sync In Progress
                   </span>
-                  <span className="text-xs md:text-sm font-bold text-white">
+                  <span className="text-xs md:text-sm font-bold text-white truncate">
                     {activeAction ? getActionLabel(activeAction) : "Database cleanup operation in progress..."}
                   </span>
                 </div>
                 <div className="flex items-center space-x-2 text-[11px] text-slate-300 font-medium mt-1">
-                  <span className="inline-flex items-center space-x-1.5 text-cyan-300">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-                    <span>{syncStage}</span>
+                  <span className="inline-flex items-center space-x-1.5 text-cyan-300 min-w-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shrink-0"></span>
+                    <span className="truncate">{syncStage}</span>
                   </span>
                 </div>
               </div>
             </div>
 
             {/* Right Telemetry: Time, Speed, Items, and Terminate Button */}
-            <div className="flex items-center space-x-2 sm:space-x-3">
-              <div className="flex items-center space-x-2 text-xs bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 font-mono shadow-inner">
-                <span className="text-slate-400 text-[11px]">⏱ Time:</span>
-                <span className="font-bold text-cyan-300 text-xs">{formatElapsedTime(syncElapsedSeconds)}</span>
-                <span className="text-slate-600">|</span>
-                <span className="text-slate-400 text-[11px]">⚡ Speed:</span>
-                <span className="font-bold text-amber-300 text-xs">{syncSpeed}</span>
-                <span className="text-slate-600">|</span>
-                <span className="text-slate-400 text-[11px]">📊 Items:</span>
-                <span className="font-bold text-emerald-300 text-xs">{syncProcessedCount} / {deliverables.length > 0 ? deliverables.length : 183}</span>
+            <div className="w-full lg:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 pt-2.5 lg:pt-0 border-t border-white/10 lg:border-t-0">
+              <div className="flex items-center justify-between sm:justify-start space-x-2 text-xs bg-white/10 px-3 py-2 sm:py-1.5 rounded-xl border border-white/10 font-mono shadow-inner overflow-x-auto no-scrollbar">
+                <div className="flex items-center space-x-1 shrink-0">
+                  <span className="text-slate-400 text-[11px]">⏱ Time:</span>
+                  <span className="font-bold text-cyan-300 text-xs">{formatElapsedTime(syncElapsedSeconds)}</span>
+                </div>
+                <span className="text-slate-600 shrink-0">|</span>
+                <div className="flex items-center space-x-1 shrink-0">
+                  <span className="text-slate-400 text-[11px]">⚡ Speed:</span>
+                  <span className="font-bold text-amber-300 text-xs">{syncSpeed}</span>
+                </div>
+                <span className="text-slate-600 shrink-0">|</span>
+                <div className="flex items-center space-x-1 shrink-0">
+                  <span className="text-slate-400 text-[11px]">📊 Items:</span>
+                  <span className="font-bold text-emerald-300 text-xs">{syncProcessedCount} / {deliverables.length > 0 ? deliverables.length : 183}</span>
+                </div>
               </div>
 
               <button
                 type="button"
                 onClick={handleCancelAction}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs flex items-center space-x-1.5 shadow-md cursor-pointer transition-all border border-rose-500/50"
+                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs flex items-center justify-center space-x-1.5 shadow-md cursor-pointer transition-all border border-rose-500/50 shrink-0"
               >
                 <Square className="w-3.5 h-3.5 fill-current" />
                 <span>⏹ Terminate Sync</span>

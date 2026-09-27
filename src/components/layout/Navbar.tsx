@@ -83,11 +83,12 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
         <div className="flex items-center space-x-2.5 sm:space-x-4">
           <div className="relative flex items-center">
             <img
-              src="/logo.png"
+              src="/xcelerate-logo-trimmed.png"
               alt="Xcelerate Media"
-              className="h-8 sm:h-11 w-auto object-contain drop-shadow-xs"
+              className="h-10 sm:h-12 w-auto object-contain drop-shadow-xs"
             />
           </div>
+
 
           <div className="hidden sm:block border-l border-slate-200 pl-4">
             <div className="flex items-center space-x-2">

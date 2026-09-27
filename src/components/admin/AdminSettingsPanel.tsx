@@ -165,28 +165,28 @@ export const AdminSettingsPanel: React.FC<AdminSettingsPanelProps> = React.memo(
   return (
     <div className="space-y-6">
       {/* Top Admin Section Switcher */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 border-b border-slate-200 pb-3">
         <button
           onClick={() => setAdminSection("sync")}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+          className={`flex items-center justify-center sm:justify-start space-x-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
             adminSection === "sync"
               ? "bg-[#0052FF] text-white shadow-md shadow-blue-500/20"
               : "bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 border border-slate-200 shadow-2xs"
           }`}
         >
-          <FileSpreadsheet className="w-4 h-4" />
+          <FileSpreadsheet className="w-4 h-4 shrink-0" />
           <span>⚡ Google Sheets Sync &amp; Automation Hub</span>
         </button>
 
         <button
           onClick={() => setAdminSection("credentials")}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+          className={`flex items-center justify-center sm:justify-start space-x-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
             adminSection === "credentials"
               ? "bg-slate-900 text-white shadow-md shadow-slate-900/20"
               : "bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 border border-slate-200 shadow-2xs"
           }`}
         >
-          <KeyRound className="w-4 h-4" />
+          <KeyRound className="w-4 h-4 shrink-0" />
           <span>🔑 Portal Credentials Manager</span>
         </button>
       </div>
