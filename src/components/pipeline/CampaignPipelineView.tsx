@@ -2903,73 +2903,105 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
               )}
 
               {/* ── 7. Asset Links Grid ── */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                {selectedCreator.script_link ? (
-                  <a
-                    href={selectedCreator.script_link.startsWith("http") ? selectedCreator.script_link : `https://${selectedCreator.script_link}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-3 rounded-2xl bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 text-left transition-all block shadow-xs"
-                  >
-                    <div className="text-slate-500 text-xs flex items-center justify-between font-semibold">
-                      <span>Script Document / Asset</span>
-                      <ExternalLink className="w-3 h-3 text-[#0052FF]" />
-                    </div>
-                    <div className="text-[#0052FF] text-xs font-extrabold mt-1 flex items-center space-x-1.5">
-                      <FileText className="w-4 h-4" />
-                      <span>{getScriptLinkInfo(selectedCreator.script_link)?.label || "Open Document ↗"}</span>
-                    </div>
-                  </a>
-                ) : (
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-slate-400 text-xs">
-                    Script link not attached
-                  </div>
-                )}
-
-                {selectedCreator.revision_drive_link ? (
-                  <a
-                    href={selectedCreator.revision_drive_link}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-3 rounded-2xl bg-white border border-slate-200 hover:border-purple-400 hover:bg-purple-50/50 text-left transition-all block shadow-xs"
-                  >
-                    <div className="text-slate-500 text-xs flex items-center justify-between font-semibold">
-                      <span>Drafts &amp; Revisions</span>
-                      <ExternalLink className="w-3 h-3 text-purple-600" />
-                    </div>
-                    <div className="text-purple-700 text-xs font-extrabold mt-1 flex items-center space-x-1.5">
-                      <FolderOpen className="w-4 h-4" />
-                      <span>Open Drive Folder</span>
-                    </div>
-                  </a>
-                ) : (
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-slate-400 text-xs">
-                    Revision link not attached
-                  </div>
-                )}
-
-                {selectedCreator.live_link ? (
+              {role === "PERFORMANCE_ANALYST" ? (
+                selectedCreator.live_link ? (
                   <a
                     href={selectedCreator.live_link}
                     target="_blank"
                     rel="noreferrer"
-                    className="p-3 rounded-2xl bg-blue-50/80 border border-blue-200 hover:border-blue-400 text-left transition-all block shadow-xs"
+                    className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50/60 border border-blue-200 hover:border-[#0052FF] text-left transition-all flex items-center justify-between shadow-xs group"
                   >
-                    <div className="text-slate-500 text-xs flex items-center justify-between font-semibold">
-                      <span>Live Post</span>
-                      <ExternalLink className="w-3 h-3 text-[#0052FF]" />
+                    <div className="flex items-center space-x-3">
+                      <div className="w-9 h-9 rounded-xl bg-[#0052FF] text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <Video className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-black text-slate-900 group-hover:text-[#0052FF] transition-colors flex items-center space-x-1">
+                          <span>View Live Post on Instagram</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-medium">Tap to open Reel, check verified views, and copy insights</div>
+                      </div>
                     </div>
-                    <div className="text-[#0052FF] text-xs font-extrabold mt-1 flex items-center space-x-1.5">
-                      <Video className="w-4 h-4" />
-                      <span>View Live Content</span>
-                    </div>
+                    <span className="text-[11px] font-bold text-[#0052FF] bg-white px-2.5 py-1 rounded-lg border border-blue-200/80 shadow-2xs shrink-0 hidden sm:inline">
+                      Open Reel ↗
+                    </span>
                   </a>
                 ) : (
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-slate-400 text-xs">
-                    Awaiting Go-Live
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-slate-400 text-xs flex items-center space-x-2">
+                    <Video className="w-4 h-4 text-slate-300" />
+                    <span>Awaiting Go-Live Reel URL from Creator</span>
                   </div>
-                )}
-              </div>
+                )
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {selectedCreator.script_link ? (
+                    <a
+                      href={selectedCreator.script_link.startsWith("http") ? selectedCreator.script_link : `https://${selectedCreator.script_link}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-3 rounded-2xl bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 text-left transition-all block shadow-xs"
+                    >
+                      <div className="text-slate-500 text-xs flex items-center justify-between font-semibold">
+                        <span>Script Document / Asset</span>
+                        <ExternalLink className="w-3 h-3 text-[#0052FF]" />
+                      </div>
+                      <div className="text-[#0052FF] text-xs font-extrabold mt-1 flex items-center space-x-1.5">
+                        <FileText className="w-4 h-4" />
+                        <span>{getScriptLinkInfo(selectedCreator.script_link)?.label || "Open Document ↗"}</span>
+                      </div>
+                    </a>
+                  ) : (
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-slate-400 text-xs">
+                      Script link not attached
+                    </div>
+                  )}
+
+                  {selectedCreator.revision_drive_link ? (
+                    <a
+                      href={selectedCreator.revision_drive_link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-3 rounded-2xl bg-white border border-slate-200 hover:border-purple-400 hover:bg-purple-50/50 text-left transition-all block shadow-xs"
+                    >
+                      <div className="text-slate-500 text-xs flex items-center justify-between font-semibold">
+                        <span>Drafts &amp; Revisions</span>
+                        <ExternalLink className="w-3 h-3 text-purple-600" />
+                      </div>
+                      <div className="text-purple-700 text-xs font-extrabold mt-1 flex items-center space-x-1.5">
+                        <FolderOpen className="w-4 h-4" />
+                        <span>Open Drive Folder</span>
+                      </div>
+                    </a>
+                  ) : (
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-slate-400 text-xs">
+                      Revision link not attached
+                    </div>
+                  )}
+
+                  {selectedCreator.live_link ? (
+                    <a
+                      href={selectedCreator.live_link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-3 rounded-2xl bg-blue-50/80 border border-blue-200 hover:border-blue-400 text-left transition-all block shadow-xs"
+                    >
+                      <div className="text-slate-500 text-xs flex items-center justify-between font-semibold">
+                        <span>Live Post</span>
+                        <ExternalLink className="w-3 h-3 text-[#0052FF]" />
+                      </div>
+                      <div className="text-[#0052FF] text-xs font-extrabold mt-1 flex items-center space-x-1.5">
+                        <Video className="w-4 h-4" />
+                        <span>View Live Content</span>
+                      </div>
+                    </a>
+                  ) : (
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-slate-400 text-xs">
+                      Awaiting Go-Live
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* ── 8. Confidential Agency Section (Internal Ops Only) ── */}
               {isAdmin && (
@@ -3085,15 +3117,17 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
               )}
 
               {/* ── 10. Logistics & Address ── */}
-              <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1 text-xs">
-                <div className="font-bold text-slate-700 flex items-center space-x-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-[#0052FF]" />
-                  <span>Product Gifting &amp; Shipping Logistics:</span>
+              {role !== "PERFORMANCE_ANALYST" && selectedCreator.address && (
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1 text-xs">
+                  <div className="font-bold text-slate-700 flex items-center space-x-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-[#0052FF]" />
+                    <span>Product Gifting &amp; Shipping Logistics:</span>
+                  </div>
+                  <p className="text-slate-600 pl-5 font-medium leading-relaxed">
+                    {selectedCreator.address}
+                  </p>
                 </div>
-                <p className="text-slate-600 pl-5 font-medium leading-relaxed">
-                  {selectedCreator.address || "Direct digital brief / No physical gifting required"}
-                </p>
-              </div>
+              )}
 
               {/* ── 11. Assigned Campaign POCs ── */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">

@@ -522,23 +522,18 @@ export const ScreenshotUploader: React.FC<ScreenshotUploaderProps> = ({
               : "border-slate-200 hover:border-[#0052FF]/60 hover:bg-blue-50/20 bg-slate-50/50"
           } ${isReadOnly ? "opacity-60 pointer-events-none" : ""}`}
         >
-          <div className="flex flex-col items-center justify-center space-y-2">
-            <div className="w-10 h-10 rounded-2xl bg-blue-100/70 text-[#0052FF] flex items-center justify-center shadow-xs">
-              <UploadCloud className="w-5 h-5" />
+          <div className="flex flex-col items-center justify-center space-y-1.5 py-2">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#0052FF] flex items-center justify-center">
+              <UploadCloud className="w-4 h-4" />
             </div>
 
             <div>
               <p className="text-xs font-bold text-slate-800">
-                Click to upload or drag &amp; drop screenshots (Up to {maxFiles})
+                Upload or drag screenshots (Max {maxFiles})
               </p>
-              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                PNG, JPG, JPEG, WebP, AVIF, HEIC • Auto-compressed • Or press <kbd className="px-1.5 py-0.5 text-[9px] bg-slate-200 rounded font-mono font-bold">Ctrl+V</kbd> to paste
+              <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                Auto-compressed • Or press <kbd className="px-1.5 py-0.5 text-[9px] bg-slate-200 rounded font-mono font-bold">Ctrl+V</kbd> to paste
               </p>
-            </div>
-
-            <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-white border border-slate-200 text-slate-700 text-[10px] font-bold shadow-2xs">
-              <Sparkles className="w-3 h-3 text-[#0052FF]" />
-              <span>Multi-Screenshot Support (Max {maxFiles} Proofs)</span>
             </div>
           </div>
         </div>
