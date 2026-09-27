@@ -206,7 +206,8 @@ export function mapRowToDeliverable(
   
   const executionOwner = parseString(n.executionowner || rawRow["Execution Owner"], "");
   const explicitBrand = parseString(n.brandagencyname || rawRow["Brand/Agency Name"] || rawRow["Brand Name"], "");
-  const orgName = explicitBrand || extractBrandFromBrief(briefName || campaignName, "Default Brand");
+  // Strictly use explicit Brand/Agency Name from Column E. Never guess or extract fake brands from campaign names!
+  const orgName = explicitBrand.trim() || "Unassigned";
   
   const xceleratePoc = executionOwner || parseString(n.xceleratepoc || rawRow["Xcelerate POC"], "Team Xcelerate");
   const rawBrandPoc = parseString(
@@ -668,10 +669,12 @@ export async function syncGoogleSheetRows(rows: SheetRowRaw[]) {
       }
     }
 
-    // Deduplicate organizations
-    const orgId = `org-${campaign.org_name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
-    if (!orgsMap.has(orgId)) {
-      orgsMap.set(orgId, { id: orgId, name: campaign.org_name, type: campaign.client_type, poc_name: campaign.brand_agency_poc });
+    // Deduplicate organizations (only track real client organizations, never Unassigned)
+    if (campaign.org_name && campaign.org_name.trim() && campaign.org_name !== "Unassigned") {
+      const orgId = `org-${campaign.org_name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+      if (!orgsMap.has(orgId)) {
+        orgsMap.set(orgId, { id: orgId, name: campaign.org_name, type: campaign.client_type || "Brand", poc_name: campaign.brand_agency_poc });
+      }
     }
 
     const d = deliverable;

@@ -14,6 +14,7 @@ import {
   EyeOff,
   CheckCircle2,
   AlertTriangle,
+  AlertCircle,
   Building2,
   Mail,
   Lock,
@@ -595,24 +596,25 @@ const CredentialDrawer: React.FC<DrawerProps> = ({
 
   const currentOrg = orgName === "__custom__" ? customOrg.trim() : orgName;
 
-  // Filter campaigns available for selection
+  // Filter campaigns available for selection (strictly scoped to this client's organization)
   const availableCampaigns = useMemo(() => {
-    if (!currentOrg || showAllOrgsCampaigns || role === "PERFORMANCE_ANALYST") {
+    if (!currentOrg || role === "PERFORMANCE_ANALYST") {
       return campaigns;
     }
 
     if (role === "EMPLOYEE") {
+      if (showAllOrgsCampaigns) return campaigns;
       // Find campaigns where this employee is execution_owner or xcelerate_poc
       const matching = campaigns.filter(c => 
         (c.execution_owners && c.execution_owners.some(o => o.toLowerCase() === currentOrg.toLowerCase())) ||
         c.xcelerate_poc.toLowerCase() === currentOrg.toLowerCase()
       );
-      return matching.length > 0 ? matching : campaigns;
+      return matching;
     }
 
-    // For brand/agency: find campaigns matching this client organization
+    // For brand/agency: strictly return campaigns matching this client organization only (NEVER fall back to all campaigns!)
     const matching = campaigns.filter(c => c.org_name.toLowerCase() === currentOrg.toLowerCase());
-    return matching.length > 0 ? matching : campaigns;
+    return matching;
   }, [campaigns, currentOrg, showAllOrgsCampaigns, role]);
 
   // Search filter across campaign name, month, execution lead, organization
@@ -631,7 +633,12 @@ const CredentialDrawer: React.FC<DrawerProps> = ({
   }, [availableCampaigns, campaignSearch]);
 
   const handleSave = async () => {
-    const finalOrg = orgName === "__custom__" ? customOrg.trim() : orgName;
+    // When editing, strictly lock organization and role to prevent accidental cross-client campaign transfer
+    const finalOrg = editingCredential 
+      ? editingCredential.org_name 
+      : (orgName === "__custom__" ? customOrg.trim() : orgName);
+    const finalRole = editingCredential ? editingCredential.role : role;
+
     if (!finalOrg || !username.trim() || !password.trim()) {
       onError("All fields are required (Org, Username, Password)");
       return;
@@ -646,10 +653,10 @@ const CredentialDrawer: React.FC<DrawerProps> = ({
     try {
       if (editingCredential) {
         const result = await updateCredential(editingCredential.id, {
-          org_name: finalOrg,
+          org_name: editingCredential.org_name, // strictly preserve original organization
           portal_username: username.trim(),
           portal_password: password.trim(),
-          role,
+          role: editingCredential.role, // strictly preserve original role
           notes: notes.trim(),
           campaign_access_mode: campaignAccessMode,
           assigned_campaign_ids: campaignAccessMode === "SPECIFIC" ? assignedCampaignIds : [],
@@ -660,7 +667,7 @@ const CredentialDrawer: React.FC<DrawerProps> = ({
           org_name: finalOrg,
           portal_username: username.trim(),
           portal_password: password.trim(),
-          role,
+          role: finalRole,
           notes: notes.trim() || undefined,
           campaign_access_mode: campaignAccessMode,
           assigned_campaign_ids: campaignAccessMode === "SPECIFIC" ? assignedCampaignIds : [],
@@ -844,103 +851,131 @@ const CredentialDrawer: React.FC<DrawerProps> = ({
                   : "Client Organization Name"}
               </span>
             </label>
-            <div className="relative" ref={orgDropdownRef}>
-              <button
-                type="button"
-                onClick={() => setIsOrgDropdownOpen(!isOrgDropdownOpen)}
-                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-medium text-slate-900 hover:border-[#0052FF]/40 transition-all cursor-pointer"
-              >
-                <span className={orgName ? "text-slate-900" : "text-slate-400"}>
-                  {orgName === "__custom__" 
-                    ? (role === "EMPLOYEE" ? "Custom Employee Name" : "Custom Organization") 
-                    : orgName || (role === "EMPLOYEE" ? "Select employee..." : "Select organization...")}
-                </span>
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOrgDropdownOpen ? "rotate-180" : ""}`} />
-              </button>
 
-              {isOrgDropdownOpen && (
-                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-[70] overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
-                  {role === "EMPLOYEE" ? (
-                    executionOwners.length > 0 ? (
-                      executionOwners.map((owner) => (
+            {editingCredential ? (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-slate-100 border border-slate-200">
+                  <div className="flex items-center space-x-2">
+                    <Lock className="w-4 h-4 text-slate-500 shrink-0" />
+                    <span className="text-sm font-bold text-slate-900">{editingCredential.org_name}</span>
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-slate-200 text-slate-700 tracking-wider">
+                      Locked
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
+                    Organization cannot be changed
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-700 font-medium flex items-center space-x-1.5 bg-amber-50 p-2 rounded-lg border border-amber-200/80">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                  <span>
+                    Organization is permanently locked on existing credentials to prevent accidental cross-client campaign transfer. To manage credentials for another brand, create a separate credential.
+                  </span>
+                </p>
+              </div>
+            ) : (
+              <div className="relative" ref={orgDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsOrgDropdownOpen(!isOrgDropdownOpen)}
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-medium text-slate-900 hover:border-[#0052FF]/40 transition-all cursor-pointer"
+                >
+                  <span className={orgName ? "text-slate-900" : "text-slate-400"}>
+                    {orgName === "__custom__" 
+                      ? (role === "EMPLOYEE" ? "Custom Employee Name" : "Custom Organization") 
+                      : orgName || (role === "EMPLOYEE" ? "Select employee..." : "Select organization...")}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOrgDropdownOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {isOrgDropdownOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-[70] overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+                    {role === "EMPLOYEE" ? (
+                      executionOwners.length > 0 ? (
+                        executionOwners.map((owner) => (
+                          <button
+                            key={owner}
+                            onClick={() => { 
+                              setOrgName(owner); 
+                              setAssignedCampaignIds([]);
+                              setIsOrgDropdownOpen(false);
+                              if (!editingCredential) {
+                                const slug = owner.toLowerCase().replace(/[^a-z0-9]/g, "");
+                                setUsername(`${slug || "emp"}@xceleratemedia.in`);
+                                setPassword(`Emp@${(slug || "Xcelerate").toUpperCase()}2026!`);
+                              }
+                            }}
+                            className={`w-full text-left px-4 py-2.5 text-xs font-semibold transition-colors cursor-pointer ${
+                              orgName === owner
+                                ? "bg-emerald-50 text-emerald-700 font-bold"
+                                : "text-slate-700 hover:bg-slate-50"
+                            }`}
+                          >
+                            👤 {owner}
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-4 py-2 text-xs text-slate-500 italic">No assigned owners found in sheet</div>
+                      )
+                    ) : role === "PERFORMANCE_ANALYST" ? (
+                      ["Performance Analyst", "Analytics Team", "Growth Team"].map((lbl) => (
                         <button
-                          key={owner}
-                          onClick={() => { 
-                            setOrgName(owner); 
+                          key={lbl}
+                          onClick={() => {
+                            setOrgName(lbl);
+                            setAssignedCampaignIds([]);
                             setIsOrgDropdownOpen(false);
-                            if (!editingCredential) {
-                              const slug = owner.toLowerCase().replace(/[^a-z0-9]/g, "");
-                              setUsername(`${slug || "emp"}@xceleratemedia.in`);
-                              setPassword(`Emp@${(slug || "Xcelerate").toUpperCase()}2026!`);
-                            }
                           }}
                           className={`w-full text-left px-4 py-2.5 text-xs font-semibold transition-colors cursor-pointer ${
-                            orgName === owner
-                              ? "bg-emerald-50 text-emerald-700 font-bold"
-                              : "text-slate-700 hover:bg-slate-50"
+                            orgName === lbl ? "bg-indigo-50 text-indigo-700 font-bold" : "text-slate-700 hover:bg-slate-50"
                           }`}
                         >
-                          👤 {owner}
+                          📊 {lbl}
                         </button>
                       ))
                     ) : (
-                      <div className="px-4 py-2 text-xs text-slate-500 italic">No assigned owners found in sheet</div>
-                    )
-                  ) : role === "PERFORMANCE_ANALYST" ? (
-                    ["Performance Analyst", "Analytics Team", "Growth Team"].map((lbl) => (
-                      <button
-                        key={lbl}
-                        onClick={() => {
-                          setOrgName(lbl);
-                          setIsOrgDropdownOpen(false);
-                        }}
-                        className={`w-full text-left px-4 py-2.5 text-xs font-semibold transition-colors cursor-pointer ${
-                          orgName === lbl ? "bg-indigo-50 text-indigo-700 font-bold" : "text-slate-700 hover:bg-slate-50"
-                        }`}
-                      >
-                        📊 {lbl}
-                      </button>
-                    ))
-                  ) : (
-                    orgNames.map((name) => (
-                      <button
-                        key={name}
-                        onClick={() => { 
-                          setOrgName(name); 
-                          setIsOrgDropdownOpen(false);
-                          if (!editingCredential && !username) {
-                            const slug = name.toLowerCase().replace(/[^a-z0-9]/g, "");
-                            setUsername(`${slug || "brand"}@xceleratemedia.in`);
-                            setPassword(`Brand@${(slug || "Xcelerate").toUpperCase()}2026!`);
-                          }
-                        }}
-                        className={`w-full text-left px-4 py-2.5 text-xs font-semibold transition-colors cursor-pointer ${
-                          orgName === name
-                            ? "bg-blue-50 text-[#0052FF] font-bold"
-                            : "text-slate-700 hover:bg-slate-50"
-                        }`}
-                      >
-                        {name}
-                      </button>
-                    ))
-                  )}
-                  <div className="border-t border-slate-100" />
-                  <button
-                    onClick={() => { 
-                      setOrgName("__custom__"); 
-                      setIsOrgDropdownOpen(false); 
-                    }}
-                    className={`w-full text-left px-4 py-2.5 text-xs font-semibold transition-colors cursor-pointer ${
-                      orgName === "__custom__"
-                        ? "bg-indigo-50 text-indigo-600 font-bold"
-                        : "text-indigo-500 hover:bg-indigo-50/50"
-                    }`}
-                  >
-                    + Add New {role === "EMPLOYEE" ? "Employee Name" : "Organization"}
-                  </button>
-                </div>
-              )}
-            </div>
+                      orgNames.map((name) => (
+                        <button
+                          key={name}
+                          onClick={() => { 
+                            setOrgName(name); 
+                            setAssignedCampaignIds([]); // Reset assigned campaigns when switching org!
+                            setIsOrgDropdownOpen(false);
+                            if (!editingCredential && !username) {
+                              const slug = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+                              setUsername(`${slug || "brand"}@xceleratemedia.in`);
+                              setPassword(`Brand@${(slug || "Xcelerate").toUpperCase()}2026!`);
+                            }
+                          }}
+                          className={`w-full text-left px-4 py-2.5 text-xs font-semibold transition-colors cursor-pointer ${
+                            orgName === name
+                              ? "bg-blue-50 text-[#0052FF] font-bold"
+                              : "text-slate-700 hover:bg-slate-50"
+                          }`}
+                        >
+                          {name}
+                        </button>
+                      ))
+                    )}
+                    <div className="border-t border-slate-100" />
+                    <button
+                      onClick={() => { 
+                        setOrgName("__custom__"); 
+                        setAssignedCampaignIds([]);
+                        setIsOrgDropdownOpen(false); 
+                      }}
+                      className={`w-full text-left px-4 py-2.5 text-xs font-semibold transition-colors cursor-pointer ${
+                        orgName === "__custom__"
+                          ? "bg-indigo-50 text-indigo-600 font-bold"
+                          : "text-indigo-500 hover:bg-indigo-50/50"
+                      }`}
+                    >
+                      + Add New {role === "EMPLOYEE" ? "Employee Name" : "Organization"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {orgName === "__custom__" && (
               <input
@@ -1064,8 +1099,8 @@ const CredentialDrawer: React.FC<DrawerProps> = ({
                   </div>
                 </div>
 
-                {/* Filter Scope Indicator / Toggle */}
-                {currentOrg && (
+                {/* Filter Scope Indicator / Toggle (Only for Employee or Performance Analyst) */}
+                {currentOrg && (role === "EMPLOYEE" || role === "PERFORMANCE_ANALYST") && (
                   <div className="flex items-center justify-between px-1 text-[11px] text-slate-500">
                     <span>
                       {showAllOrgsCampaigns ? "Showing all organization campaigns" : `Showing ${currentOrg} campaigns (${availableCampaigns.length})`}

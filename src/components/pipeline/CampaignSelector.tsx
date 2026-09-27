@@ -51,15 +51,18 @@ export const CampaignSelector: React.FC<CampaignSelectorProps> = React.memo(({
     return campaigns.reduce((acc, c) => acc + (c.deliverables_count || 0), 0);
   }, [campaigns]);
 
-  // Extract unique brands for filter tabs
+  // Extract unique brands for filter tabs (only actual brands, skip unassigned)
   const brandList = useMemo(() => {
     const counts = new Map<string, number>();
     campaigns.forEach((c) => {
-      const org = c.org_name || "General";
-      counts.set(org, (counts.get(org) || 0) + 1);
+      const org = (c.org_name || "").trim();
+      if (org && org !== "Unassigned" && org !== "Default Brand" && org !== "General") {
+        counts.set(org, (counts.get(org) || 0) + 1);
+      }
     });
     return Array.from(counts.entries()).map(([name, count]) => ({ name, count }));
   }, [campaigns]);
+
 
   // Filter campaigns by search query and selected brand
   const filteredCampaigns = useMemo(() => {

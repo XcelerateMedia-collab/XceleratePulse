@@ -36,18 +36,22 @@ export async function getCampaigns(
 
   const args: any[] = [];
 
-  // Strict RBAC: If specific campaigns are assigned, strictly return ONLY those campaigns
-  if (role === "BRAND_CLIENT" || role === "AGENCY_CLIENT" || role === "EMPLOYEE") {
+  // Strict RBAC: Brand/Agency clients CAN NEVER see campaigns outside their organization
+  if (role === "BRAND_CLIENT" || role === "AGENCY_CLIENT") {
+    sql += " WHERE LOWER(c.org_name) = LOWER(?) ";
+    args.push(orgName);
     if (assignedCampaignIds && assignedCampaignIds.length > 0) {
       const placeholders = assignedCampaignIds.map(() => "?").join(", ");
-      sql += ` WHERE c.id IN (${placeholders}) `;
+      sql += ` AND c.id IN (${placeholders}) `;
       args.push(...assignedCampaignIds);
-    } else if (role === "BRAND_CLIENT" || role === "AGENCY_CLIENT") {
-      sql += " WHERE LOWER(c.org_name) = LOWER(?) ";
-      args.push(orgName);
-    } else if (role === "EMPLOYEE") {
-      sql += " WHERE c.id IN (SELECT DISTINCT campaign_id FROM campaign_creators WHERE LOWER(COALESCE(execution_owner, '')) = LOWER(?)) ";
-      args.push(orgName); // orgName carries the employee name for EMPLOYEE role
+    }
+  } else if (role === "EMPLOYEE") {
+    sql += " WHERE c.id IN (SELECT DISTINCT campaign_id FROM campaign_creators WHERE LOWER(COALESCE(execution_owner, '')) = LOWER(?)) ";
+    args.push(orgName); // orgName carries the employee name for EMPLOYEE role
+    if (assignedCampaignIds && assignedCampaignIds.length > 0) {
+      const placeholders = assignedCampaignIds.map(() => "?").join(", ");
+      sql += ` AND c.id IN (${placeholders}) `;
+      args.push(...assignedCampaignIds);
     }
   }
   // PERFORMANCE_ANALYST and SUPER_ADMIN/INTERNAL_OPS see everything
@@ -210,20 +214,22 @@ export async function getCampaignDeliverables(
     `;
     const delivArgs: any[] = [];
 
-    if (assignedCampaignIds && assignedCampaignIds.length > 0) {
-      const placeholders = assignedCampaignIds.map(() => "?").join(", ");
-      delivSql += ` WHERE c.id IN (${placeholders})`;
-      delivArgs.push(...assignedCampaignIds);
-      if (role === "EMPLOYEE") {
-        delivSql += ` AND LOWER(COALESCE(d.execution_owner, '')) = LOWER(?)`;
-        delivArgs.push(orgName);
-      }
-    } else if (role === "BRAND_CLIENT" || role === "AGENCY_CLIENT") {
+    if (role === "BRAND_CLIENT" || role === "AGENCY_CLIENT") {
       delivSql += ` WHERE LOWER(c.org_name) = LOWER(?)`;
       delivArgs.push(orgName);
+      if (assignedCampaignIds && assignedCampaignIds.length > 0) {
+        const placeholders = assignedCampaignIds.map(() => "?").join(", ");
+        delivSql += ` AND c.id IN (${placeholders})`;
+        delivArgs.push(...assignedCampaignIds);
+      }
     } else if (role === "EMPLOYEE") {
       delivSql += ` WHERE LOWER(COALESCE(d.execution_owner, '')) = LOWER(?)`;
       delivArgs.push(orgName); // orgName carries the employee name for EMPLOYEE role
+      if (assignedCampaignIds && assignedCampaignIds.length > 0) {
+        const placeholders = assignedCampaignIds.map(() => "?").join(", ");
+        delivSql += ` AND c.id IN (${placeholders})`;
+        delivArgs.push(...assignedCampaignIds);
+      }
     }
     // PERFORMANCE_ANALYST sees everything (same as SUPER_ADMIN)
 
@@ -251,14 +257,12 @@ export async function getCampaignDeliverables(
   let campSql = `SELECT * FROM campaigns WHERE id = ?`;
   const campArgs: any[] = [campaignId];
 
-  if (!assignedCampaignIds || assignedCampaignIds.length === 0) {
-    if (role === "BRAND_CLIENT" || role === "AGENCY_CLIENT") {
-      campSql += ` AND LOWER(org_name) = LOWER(?)`;
-      campArgs.push(orgName);
-    } else if (role === "EMPLOYEE") {
-      campSql += ` AND id IN (SELECT DISTINCT campaign_id FROM campaign_creators WHERE LOWER(COALESCE(execution_owner, '')) = LOWER(?))`;
-      campArgs.push(orgName);
-    }
+  if (role === "BRAND_CLIENT" || role === "AGENCY_CLIENT") {
+    campSql += ` AND LOWER(org_name) = LOWER(?)`;
+    campArgs.push(orgName);
+  } else if (role === "EMPLOYEE") {
+    campSql += ` AND id IN (SELECT DISTINCT campaign_id FROM campaign_creators WHERE LOWER(COALESCE(execution_owner, '')) = LOWER(?))`;
+    campArgs.push(orgName);
   }
 
   const campResult = await db.execute({ sql: campSql, args: campArgs });
@@ -660,7 +664,7 @@ export async function getOrganizationNames(): Promise<string[]> {
   await initDatabase();
 
   const result = await db.execute(
-    `SELECT DISTINCT org_name FROM campaigns ORDER BY org_name ASC`
+    `SELECT DISTINCT org_name FROM campaigns WHERE org_name IS NOT NULL AND TRIM(org_name) != '' AND org_name NOT IN ('Unassigned', 'Default Brand') ORDER BY org_name ASC`
   );
 
   return result.rows.map((row: any) => String(row.org_name));
