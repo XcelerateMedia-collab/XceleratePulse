@@ -30,10 +30,14 @@ export async function POST(req: NextRequest) {
     if (campaign) url.searchParams.set("campaign", campaign);
 
     // Pass the active webhook URL so Google Apps Script can dynamically update its destination
-    const tunnelUrl = process.env.NEXT_PUBLIC_TUNNEL_URL || "";
-    if (tunnelUrl) {
-      url.searchParams.set("webhookUrl", `${tunnelUrl}/api/sync/sheets`);
+    const webhookOrigin = process.env.NEXT_PUBLIC_APP_URL 
+      || process.env.NEXT_PUBLIC_TUNNEL_URL 
+      || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "")
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://xcelerate-pulse.vercel.app");
+    if (webhookOrigin) {
+      url.searchParams.set("webhookUrl", `${webhookOrigin}/api/sync/sheets`);
     }
+
 
     const res = await fetch(url.toString(), {
       method: "GET",

@@ -197,9 +197,10 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
   const [copiedKey, setCopiedKey] = useState<boolean>(false);
   const [showDeploymentHelp, setShowDeploymentHelp] = useState<boolean>(false);
 
-  const activeWebhookUrl = process.env.NEXT_PUBLIC_TUNNEL_URL 
-    ? `${process.env.NEXT_PUBLIC_TUNNEL_URL}/api/sync/sheets` 
-    : "https://vinyl-judge-texture-avi.trycloudflare.com/api/sync/sheets";
+  const activeWebhookUrl = (typeof window !== "undefined" && window.location.origin)
+    ? `${window.location.origin}/api/sync/sheets`
+    : (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_TUNNEL_URL || "https://xcelerate-pulse.vercel.app") + "/api/sync/sheets";
+
 
   // Form selections for granular triggers
   const [selectedEmployee, setSelectedEmployee] = useState<string>("Payal");

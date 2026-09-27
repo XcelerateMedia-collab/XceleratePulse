@@ -19,12 +19,9 @@
  * ============================================================================
  */
 
-// Live endpoint of your Xcelerate Pulse Platform
-// NOTE FOR HANDOVER & PRODUCTION:
-// - While testing locally: Keep this Cloudflare Tunnel URL below.
-// - When deployed to Production (Vercel / Custom Domain): 
-//   Simply replace this with your domain, e.g. "https://pulse.xceleratemedia.in/api/sync/sheets"
-var WEBHOOK_URL = "https://vinyl-judge-texture-avi.trycloudflare.com/api/sync/sheets"; 
+// Live endpoint of your Xcelerate Pulse Platform (Production on Vercel)
+var WEBHOOK_URL = "https://xcelerate-pulse.vercel.app/api/sync/sheets"; 
+
 
 /**
  * Returns dynamic webhook URL if provided or saved in ScriptProperties, fallback to WEBHOOK_URL

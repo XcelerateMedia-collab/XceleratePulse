@@ -33,12 +33,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Ensure uploads directory exists
-    const uploadsDir = path.join(process.cwd(), "public", "uploads", "screenshots");
-    if (!existsSync(uploadsDir)) {
-      await mkdir(uploadsDir, { recursive: true });
-    }
-
     // Determine extension
     let ext = "png";
     const nameParts = file.name.split(".");
@@ -54,14 +48,26 @@ export async function POST(req: NextRequest) {
     const safeMilestone = String(milestone).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 10);
     const uniqueSuffix = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const filename = `proof_${safeMilestone}_${safeCreator}_${uniqueSuffix}.${ext}`;
-    const targetFilePath = path.join(uploadsDir, filename);
 
-    // Read buffer and save to local public folder as instant local cache/backup
+    // Read file buffer
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    await writeFile(targetFilePath, buffer);
 
+    // Save to local public folder if filesystem is writable (safely skip on read-only serverless like Vercel)
     const publicUrl = `/uploads/screenshots/${filename}`;
+    let localSaved = false;
+    try {
+      const uploadsDir = path.join(process.cwd(), "public", "uploads", "screenshots");
+      if (!existsSync(uploadsDir)) {
+        await mkdir(uploadsDir, { recursive: true });
+      }
+      const targetFilePath = path.join(uploadsDir, filename);
+      await writeFile(targetFilePath, buffer);
+      localSaved = true;
+    } catch (fsErr) {
+      console.warn("Local disk write skipped (serverless read-only filesystem):", fsErr);
+    }
+
 
     // If Google Apps Script Web App URL is configured, push directly to Google Drive!
     const gasWebAppUrl = process.env.GOOGLE_APPS_SCRIPT_WEBAPP_URL;
