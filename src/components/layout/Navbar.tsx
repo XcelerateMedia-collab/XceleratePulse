@@ -129,24 +129,11 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
           {onExitToLanding && (
             <button
               onClick={onExitToLanding}
-              className={`flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-2xs ${
-                isInternalAdmin
-                  ? "bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-200"
-                  : "bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 border border-red-200"
-              }`}
-              title={isInternalAdmin ? "Return to Public Landing Page" : "Sign Out of Brand Session"}
+              className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-2xs bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 border border-red-200"
+              title="Sign Out of Portal"
             >
-              {isInternalAdmin ? (
-                <>
-                  <HomeIcon className="w-3.5 h-3.5 text-slate-500" />
-                  <span className="hidden sm:inline">Landing Page</span>
-                </>
-              ) : (
-                <>
-                  <LogOut className="w-3.5 h-3.5 text-red-500" />
-                  <span className="hidden sm:inline">Sign Out</span>
-                </>
-              )}
+              <LogOut className="w-3.5 h-3.5 text-red-500" />
+              <span className="hidden sm:inline">Sign Out</span>
             </button>
           )}
 
@@ -300,6 +287,21 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                         <CheckCircle2 className="w-4 h-4 text-[#0052FF]" />
                       )}
                     </button>
+
+                    {onExitToLanding && (
+                      <div className="pt-2 border-t border-slate-100 mt-2">
+                        <button
+                          onClick={() => {
+                            setDropdownOpen(false);
+                            onExitToLanding();
+                          }}
+                          className="w-full py-2.5 px-3 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold border border-red-200 transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-2xs"
+                        >
+                          <LogOut className="w-3.5 h-3.5" />
+                          <span>Sign Out of Portal</span>
+                        </button>
+                      </div>
+                    )}
                   </>
                 ) : (isEmployeeRole || isAnalystRole) ? (
                   /* Employee / Performance Analyst Simplified Panel */

@@ -24,7 +24,20 @@ import {
   Settings
 } from "lucide-react";
 
+const SESSION_STORAGE_KEY = "xcelerate_pulse_auth_session";
+
+interface PulseAuthSession {
+  viewMode: "landing" | "portal";
+  role: Role;
+  selectedOrg: string;
+  activeTab: "pipeline" | "analytics" | "financials" | "settings";
+  credential?: BrandCredential | null;
+  selectedCampaignId?: string;
+  timestamp: number;
+}
+
 export default function Home() {
+  const [isSessionRestoring, setIsSessionRestoring] = useState<boolean>(true);
   const [viewMode, setViewMode] = useState<"landing" | "portal">("landing");
   const [role, setRole] = useState<Role>("BRAND_CLIENT");
   const [selectedOrg, setSelectedOrg] = useState<string>("All Organizations");
@@ -46,6 +59,8 @@ export default function Home() {
   selectedCampaignIdRef.current = selectedCampaignId;
   const deliverablesRef = useRef(deliverables);
   deliverablesRef.current = deliverables;
+  const activeCredentialRef = useRef(activeCredential);
+  activeCredentialRef.current = activeCredential;
 
   // Determine effective assigned campaign IDs based on active credential or matched org
   const effectiveAssignedCampaignIds = useMemo(() => {
@@ -65,12 +80,96 @@ export default function Home() {
     return undefined;
   }, [role, selectedOrg, activeCredential, credentials]);
 
-  // Pre-load credentials on mount so internal sessions and switcher stay updated
+  // Handle explicit sign-out & return to landing page
+  const handleExitToLanding = useCallback(() => {
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+      }
+    } catch {}
+    setActiveCredential(null);
+    setSelectedCampaignId("ALL");
+    setRole("BRAND_CLIENT");
+    setSelectedOrg("All Organizations");
+    setActiveTab("pipeline");
+    setViewMode("landing");
+  }, []);
+
+  // 1. Session Restoration on Initial Mount
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem(SESSION_STORAGE_KEY);
+        if (saved) {
+          const session: PulseAuthSession = JSON.parse(saved);
+          if (session && session.viewMode === "portal") {
+            if (session.role) setRole(session.role);
+            if (session.selectedOrg) setSelectedOrg(session.selectedOrg);
+            if (session.activeTab) setActiveTab(session.activeTab);
+            if (session.credential) setActiveCredential(session.credential);
+            if (session.selectedCampaignId) setSelectedCampaignId(session.selectedCampaignId);
+            setViewMode("portal");
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to restore session from storage:", err);
+    } finally {
+      setIsSessionRestoring(false);
+    }
+  }, []);
+
+  // 2. Persist Session on State Changes
+  useEffect(() => {
+    if (isSessionRestoring || typeof window === "undefined") return;
+    if (viewMode === "portal") {
+      try {
+        const sessionData: PulseAuthSession = {
+          viewMode: "portal",
+          role,
+          selectedOrg,
+          activeTab,
+          credential: activeCredential,
+          selectedCampaignId,
+          timestamp: Date.now(),
+        };
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+      } catch (err) {
+        console.error("Failed to persist session to storage:", err);
+      }
+    } else {
+      try {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+      } catch {}
+    }
+  }, [isSessionRestoring, viewMode, role, selectedOrg, activeTab, activeCredential, selectedCampaignId]);
+
+  // Pre-load credentials on mount and re-validate active restored credential
   useEffect(() => {
     getCredentials()
-      .then((creds) => setCredentials(creds))
+      .then((creds) => {
+        setCredentials(creds);
+
+        // Security re-validation of restored credential:
+        // If current session is a non-admin role with an active credential, check if still active
+        if (roleRef.current !== "SUPER_ADMIN" && roleRef.current !== "INTERNAL_OPS") {
+          const currentCred = activeCredentialRef.current;
+          if (currentCred) {
+            const freshCred = creds.find(
+              (c) => c.id === currentCred.id || c.portal_username.toLowerCase() === currentCred.portal_username.toLowerCase()
+            );
+            if (!freshCred || !freshCred.is_active) {
+              console.warn("Restored credential is disabled or deleted. Logging out.");
+              handleExitToLanding();
+            } else {
+              // Update with any modified assigned campaigns or notes
+              setActiveCredential(freshCred);
+            }
+          }
+        }
+      })
       .catch((err) => console.error("Initial credentials load error:", err));
-  }, []);
+  }, [handleExitToLanding]);
 
   const handleEnterPlatform = useCallback((
     newRole?: Role, 
@@ -78,11 +177,32 @@ export default function Home() {
     initialTab?: "pipeline" | "analytics" | "financials" | "settings",
     cred?: BrandCredential | null
   ) => {
-    if (newRole) setRole(newRole);
-    if (newOrg) setSelectedOrg(newOrg);
-    if (initialTab) setActiveTab(initialTab);
+    const roleToSet = newRole || "BRAND_CLIENT";
+    const orgToSet = newOrg || "All Organizations";
+    const tabToSet = initialTab || "pipeline";
+    if (newRole) setRole(roleToSet);
+    if (newOrg) setSelectedOrg(orgToSet);
+    if (initialTab) setActiveTab(tabToSet);
     setActiveCredential(cred || null);
+    setSelectedCampaignId("ALL");
     setViewMode("portal");
+
+    try {
+      if (typeof window !== "undefined") {
+        const sessionData: PulseAuthSession = {
+          viewMode: "portal",
+          role: roleToSet,
+          selectedOrg: orgToSet,
+          activeTab: tabToSet,
+          credential: cred || null,
+          selectedCampaignId: "ALL",
+          timestamp: Date.now(),
+        };
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+      }
+    } catch (err) {
+      console.error("Failed to save session on login:", err);
+    }
   }, []);
 
   // Load campaigns, credentials, and deliverables with a 100% stable reference to prevent re-renders on tab switch
@@ -152,11 +272,6 @@ export default function Home() {
     }
   }, [effectiveAssignedCampaignIds]);
 
-  const handleExitToLanding = useCallback(() => {
-    setActiveCredential(null);
-    setViewMode("landing");
-  }, []);
-
   useEffect(() => {
     if (viewMode === "portal") {
       loadData();
@@ -180,6 +295,27 @@ export default function Home() {
     }
     return "N/A";
   }, [isAllSelected, currentCampaign?.brand_agency_poc]);
+
+  // While restoring session from storage on page refresh, show seamless splash to prevent landing flash
+  if (isSessionRestoring) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4 selection:bg-[#0052FF] selection:text-white">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="relative">
+            <img
+              src="/xcelerate-logo-trimmed.png"
+              alt="Xcelerate Media"
+              className="h-12 w-auto object-contain animate-pulse"
+            />
+          </div>
+          <div className="flex items-center space-x-2.5 text-xs font-semibold text-slate-500">
+            <div className="w-4 h-4 border-2 border-[#0052FF] border-t-transparent rounded-full animate-spin" />
+            <span>Restoring secure session...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (viewMode === "landing") {
     return (
