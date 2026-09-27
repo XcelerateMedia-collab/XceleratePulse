@@ -167,6 +167,27 @@ export async function initDatabase(): Promise<void> {
       }
     }
 
+    // Ensure default master admin credential exists if no SUPER_ADMIN exists
+    try {
+      const adminRes = await db.execute("SELECT id FROM brand_credentials WHERE role = 'SUPER_ADMIN' LIMIT 1");
+      if (adminRes.rows.length === 0) {
+        await db.execute({
+          sql: `INSERT INTO brand_credentials (id, org_name, portal_username, portal_password, role, is_active, notes, campaign_access_mode, assigned_campaign_ids)
+                VALUES (?, ?, ?, ?, ?, 1, ?, 'ALL', '[]')`,
+          args: [
+            "admin-master",
+            "Xcelerate Media Admin",
+            "admin@xceleratemedia.in",
+            "Admin@Pulse2026!",
+            "SUPER_ADMIN",
+            "Master Super Administrator Account"
+          ]
+        });
+      }
+    } catch (adminErr) {
+      console.error("Master admin seeding error:", adminErr);
+    }
+
     isInitialized = true;
   } catch (err) {
     initPromise = null;

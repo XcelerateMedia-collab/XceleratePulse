@@ -658,6 +658,228 @@ export async function deleteCredential(
 }
 
 /**
+ * Fetch the master SUPER_ADMIN credential. Auto-seeds if not present.
+ */
+export async function getAdminCredential(): Promise<BrandCredential | null> {
+  await initDatabase();
+
+  const res = await db.execute("SELECT * FROM brand_credentials WHERE role = 'SUPER_ADMIN' ORDER BY created_at ASC LIMIT 1");
+  if (res.rows.length === 0) {
+    const id = "admin-master";
+    await db.execute({
+      sql: `INSERT INTO brand_credentials (id, org_name, portal_username, portal_password, role, is_active, notes, campaign_access_mode, assigned_campaign_ids)
+            VALUES (?, ?, ?, ?, ?, 1, ?, 'ALL', '[]')`,
+      args: [
+        id,
+        "Xcelerate Media Admin",
+        "admin@xceleratemedia.in",
+        "Admin@Pulse2026!",
+        "SUPER_ADMIN",
+        "Master Super Administrator Account"
+      ]
+    });
+    return {
+      id,
+      org_name: "Xcelerate Media Admin",
+      portal_username: "admin@xceleratemedia.in",
+      portal_password: "Admin@Pulse2026!",
+      role: "SUPER_ADMIN",
+      is_active: true,
+      notes: "Master Super Administrator Account",
+      campaign_access_mode: "ALL",
+      assigned_campaign_ids: [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  }
+
+  const row: any = res.rows[0];
+  let assignedCampaigns: string[] = [];
+  try {
+    if (row.assigned_campaign_ids) {
+      assignedCampaigns = typeof row.assigned_campaign_ids === "string"
+        ? JSON.parse(row.assigned_campaign_ids)
+        : Array.isArray(row.assigned_campaign_ids) ? row.assigned_campaign_ids : [];
+    }
+  } catch {
+    assignedCampaigns = [];
+  }
+
+  return {
+    id: String(row.id),
+    org_name: String(row.org_name),
+    portal_username: String(row.portal_username),
+    portal_password: String(row.portal_password),
+    role: "SUPER_ADMIN",
+    is_active: Number(row.is_active) === 1,
+    notes: row.notes ? String(row.notes) : undefined,
+    campaign_access_mode: "ALL",
+    assigned_campaign_ids: assignedCampaigns,
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+  };
+}
+
+/**
+ * Update the Super Admin's own login email and/or master password.
+ */
+export async function updateAdminProfile(data: {
+  portal_username?: string;
+  portal_password?: string;
+  org_name?: string;
+}): Promise<{ success: boolean; credential?: BrandCredential; error?: string }> {
+  await initDatabase();
+  const admin = await getAdminCredential();
+  if (!admin) return { success: false, error: "Master Admin record not found" };
+
+  const setClauses: string[] = [];
+  const args: any[] = [];
+
+  if (data.portal_username !== undefined) {
+    const u = data.portal_username.trim();
+    if (!u || u.length < 3) return { success: false, error: "Valid email or username is required" };
+    setClauses.push("portal_username = ?");
+    args.push(u);
+  }
+
+  if (data.portal_password !== undefined) {
+    const p = data.portal_password.trim();
+    if (!p || p.length < 5) return { success: false, error: "Password must be at least 5 characters" };
+    setClauses.push("portal_password = ?");
+    args.push(p);
+  }
+
+  if (data.org_name !== undefined) {
+    const o = data.org_name.trim();
+    if (o) {
+      setClauses.push("org_name = ?");
+      args.push(o);
+    }
+  }
+
+  if (setClauses.length === 0) {
+    return { success: false, error: "No fields to update" };
+  }
+
+  setClauses.push("updated_at = CURRENT_TIMESTAMP");
+  args.push(admin.id);
+
+  try {
+    await db.execute({
+      sql: `UPDATE brand_credentials SET ${setClauses.join(", ")} WHERE id = ?`,
+      args,
+    });
+    const updated = await getAdminCredential();
+    return { success: true, credential: updated || undefined };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Quick password reset for any credential (Brand, Agency, Employee, Analyst).
+ */
+export async function resetCredentialPassword(
+  credentialId: string,
+  newPassword: string
+): Promise<{ success: boolean; error?: string }> {
+  await initDatabase();
+  const p = newPassword.trim();
+  if (!p || p.length < 4) {
+    return { success: false, error: "Password must be at least 4 characters." };
+  }
+  try {
+    await db.execute({
+      sql: `UPDATE brand_credentials SET portal_password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      args: [p, credentialId],
+    });
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Secure Server-side authentication:
+ * Matches strictly against database credentials with zero backdoors.
+ */
+export async function verifyLogin(
+  identifier: string,
+  passwordAttempt: string
+): Promise<{
+  success: boolean;
+  role?: Role;
+  orgName?: string;
+  credential?: BrandCredential;
+  error?: string;
+}> {
+  await initDatabase();
+  const id = identifier.trim();
+  const pass = passwordAttempt.trim();
+
+  if (!id) {
+    return { success: false, error: "Please enter your portal email or username." };
+  }
+  if (!pass) {
+    return { success: false, error: "Please enter your password." };
+  }
+
+  // Ensure default master admin exists
+  await getAdminCredential();
+
+  // Query database for matching username or org name
+  const result = await db.execute({
+    sql: `SELECT * FROM brand_credentials WHERE LOWER(portal_username) = LOWER(?) OR LOWER(org_name) = LOWER(?) LIMIT 1`,
+    args: [id, id],
+  });
+
+  if (result.rows.length === 0) {
+    return { success: false, error: "No account found matching this email. Please check your credentials or contact administrator." };
+  }
+
+  const row: any = result.rows[0];
+  if (Number(row.is_active) !== 1) {
+    return { success: false, error: `Access paused: The portal account for ${row.org_name} is currently inactive. Contact your agency account manager.` };
+  }
+
+  if (String(row.portal_password) !== pass) {
+    return { success: false, error: "Incorrect password. Please verify the credentials provided." };
+  }
+
+  let assignedCampaigns: string[] = [];
+  try {
+    if (row.assigned_campaign_ids) {
+      assignedCampaigns = typeof row.assigned_campaign_ids === "string"
+        ? JSON.parse(row.assigned_campaign_ids)
+        : Array.isArray(row.assigned_campaign_ids) ? row.assigned_campaign_ids : [];
+    }
+  } catch {
+    assignedCampaigns = [];
+  }
+
+  const credential: BrandCredential = {
+    id: String(row.id),
+    org_name: String(row.org_name),
+    portal_username: String(row.portal_username),
+    portal_password: String(row.portal_password),
+    role: String(row.role || "BRAND_CLIENT") as Role,
+    is_active: true,
+    notes: row.notes ? String(row.notes) : undefined,
+    campaign_access_mode: (row.campaign_access_mode as CampaignAccessMode) || "ALL",
+    assigned_campaign_ids: assignedCampaigns,
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+  };
+
+  return {
+    success: true,
+    role: credential.role,
+    orgName: credential.org_name,
+    credential,
+  };
+}
+
+/**
  * Fetch distinct organization names (for credential form dropdown).
  */
 export async function getOrganizationNames(): Promise<string[]> {

@@ -1,16 +1,18 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import dynamic from "next/dynamic";
 import { BrandCredential, Role } from "@/lib/types";
+import { verifyLogin } from "@/lib/db/actions";
 import { 
   ArrowRight, 
   X, 
-  Building2,
-  Mail,
-  Lock,
-  Eye,
-  EyeOff
+  Building2, 
+  Mail, 
+  Lock, 
+  Eye, 
+  EyeOff,
+  Loader2
 } from "lucide-react";
 
 // Dynamically import FloatingLines with SSR disabled
@@ -26,46 +28,20 @@ interface LandingHeroProps {
     initialTab?: "pipeline" | "analytics" | "financials" | "settings",
     matchedCredential?: BrandCredential | null
   ) => void;
-  credentials: BrandCredential[];
+  credentials?: BrandCredential[];
 }
 
-export function LandingHero({ onEnterPlatform, credentials }: LandingHeroProps) {
+export function LandingHero({ onEnterPlatform }: LandingHeroProps) {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
-  // Form Inputs: Clean email and password (NO brand dropdown shown to visitors)
+  // Form Inputs: Clean email/username and password
   const [loginIdentifier, setLoginIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Secret admin click counter on logo
-  const [logoClicks, setLogoClicks] = useState(0);
-
-  // Secret Admin Hotkey: Ctrl+Shift+A or Alt+A
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "a") || (e.altKey && e.key.toLowerCase() === "a")) {
-        e.preventDefault();
-        onEnterPlatform("SUPER_ADMIN", "All Organizations", "pipeline");
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onEnterPlatform]);
-
-  // Invisible logo backdoor: 3 rapid clicks opens admin
-  const handleSecretLogoClick = () => {
-    const next = logoClicks + 1;
-    if (next >= 3) {
-      setLogoClicks(0);
-      onEnterPlatform("SUPER_ADMIN", "All Organizations", "pipeline");
-    } else {
-      setLogoClicks(next);
-      setTimeout(() => setLogoClicks(0), 1500);
-    }
-  };
-
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError("");
 
@@ -73,64 +49,38 @@ export function LandingHero({ onEnterPlatform, credentials }: LandingHeroProps) 
     const pass = password.trim();
 
     if (!id) {
-      setLoginError("Please enter your organization email or username.");
+      setLoginError("Please enter your email or organization identifier.");
       return;
     }
 
-    // 1. Secret Admin Access Backdoor
-    const ADMIN_IDENTIFIERS = ["admin", "superadmin", "admin@xcelerate.com", "ops@xcelerate.com"];
-    const ADMIN_PASSWORDS = ["admin", "superadmin", "xcelerate", "pulse2026", "pulseadmin"];
-
-    if (
-      ADMIN_IDENTIFIERS.includes(id.toLowerCase()) || 
-      ADMIN_PASSWORDS.includes(pass.toLowerCase())
-    ) {
-      onEnterPlatform("SUPER_ADMIN", "All Organizations", "pipeline");
+    if (!pass) {
+      setLoginError("Please enter your portal access password.");
       return;
     }
 
-    // 2. Client Organization Match (match by portal_username OR org_name)
-    const matched = credentials.find(
-      c => c.portal_username.toLowerCase() === id.toLowerCase() ||
-           c.org_name.toLowerCase() === id.toLowerCase()
-    );
-
-    if (!matched) {
-      setLoginError("No account found matching this email. Please check your credentials or contact your agency lead.");
-      return;
-    }
-
-    if (!matched.is_active) {
-      setLoginError(`Access paused: The portal account for ${matched.org_name} is currently inactive. Contact your agency account manager.`);
-      return;
-    }
-
-    // 3. Password Verification
-    if (matched.portal_password) {
-      if (!pass) {
-        setLoginError("Please enter your client access password.");
+    setIsSubmitting(true);
+    try {
+      const res = await verifyLogin(id, pass);
+      if (!res.success) {
+        setLoginError(res.error || "Authentication failed. Please verify credentials.");
         return;
       }
-      if (pass !== matched.portal_password && pass !== "demo") {
-        setLoginError("Incorrect password. Please verify the credentials provided by Xcelerate Media.");
-        return;
-      }
-    }
 
-    // 4. Successful Login: Route based on credential role
-    const credRole = matched.role || "BRAND_CLIENT";
-    
-    if (credRole === "EMPLOYEE") {
-      // For EMPLOYEE role, orgName carries the employee's name (from notes or portal_username)
-      // This is used to filter campaigns/deliverables by execution_owner
-      const employeeName = matched.notes?.trim() || matched.portal_username.split("@")[0] || matched.org_name;
-      onEnterPlatform("EMPLOYEE", employeeName, "pipeline", matched);
-    } else if (credRole === "PERFORMANCE_ANALYST") {
-      // Performance Analyst sees all data, but with limited edit capabilities
-      onEnterPlatform("PERFORMANCE_ANALYST", "All Organizations", "pipeline", matched);
-    } else {
-      // Standard Brand/Agency client login
-      onEnterPlatform(credRole as any, matched.org_name, "pipeline", matched);
+      const credRole = res.role || "BRAND_CLIENT";
+      if (credRole === "SUPER_ADMIN" || credRole === "INTERNAL_OPS") {
+        onEnterPlatform("SUPER_ADMIN", "All Organizations", "pipeline", res.credential);
+      } else if (credRole === "EMPLOYEE") {
+        const employeeName = res.credential?.notes?.trim() || res.credential?.portal_username.split("@")[0] || res.orgName || "Employee";
+        onEnterPlatform("EMPLOYEE", employeeName, "pipeline", res.credential);
+      } else if (credRole === "PERFORMANCE_ANALYST") {
+        onEnterPlatform("PERFORMANCE_ANALYST", "All Organizations", "pipeline", res.credential);
+      } else {
+        onEnterPlatform(credRole as any, res.orgName || "Brand Client", "pipeline", res.credential);
+      }
+    } catch (err: any) {
+      setLoginError(err.message || "Login failed. Please check network connection.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -165,8 +115,8 @@ export function LandingHero({ onEnterPlatform, credentials }: LandingHeroProps) 
       <header className="relative z-20 w-full border-b border-slate-200/90 bg-white shadow-xs shrink-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between">
           
-          {/* Company Logo & Brand Identity (Triple-click secret backdoor for admin) */}
-          <div className="flex items-center space-x-3 sm:space-x-4 cursor-pointer select-none" onClick={handleSecretLogoClick} title="Xcelerate Media (3 clicks for admin)">
+          {/* Company Logo & Brand Identity */}
+          <div className="flex items-center space-x-3 sm:space-x-4 select-none">
             <div className="relative flex items-center">
               <img
                 src="/xcelerate-logo-light.png"
@@ -340,10 +290,20 @@ export function LandingHero({ onEnterPlatform, credentials }: LandingHeroProps) 
               <div className="pt-2 space-y-2.5">
                 <button
                   type="submit"
-                  className="w-full py-2.5 rounded-xl bg-[#0052FF] hover:bg-[#0045D8] text-white font-bold text-sm shadow-md shadow-blue-500/20 active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center space-x-2"
+                  disabled={isSubmitting}
+                  className="w-full py-2.5 rounded-xl bg-[#0052FF] hover:bg-[#0045D8] disabled:opacity-60 text-white font-bold text-sm shadow-md shadow-blue-500/20 active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center space-x-2"
                 >
-                  <span>Enter Brand Dashboard</span>
-                  <ArrowRight className="w-4 h-4" />
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>Authenticating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Access Secure Dashboard</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
                 </button>
 
                 <div className="pt-2 border-t border-slate-100 text-center">

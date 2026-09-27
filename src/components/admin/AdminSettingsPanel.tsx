@@ -29,6 +29,7 @@ import {
   Layers,
   Check,
   Globe,
+  Copy,
 } from "lucide-react";
 import { BrandCredential, Role, CampaignSummary, CreatorDeliverableBrandView, CreatorDeliverableInternal, CampaignAccessMode } from "@/lib/types";
 import {
@@ -39,6 +40,9 @@ import {
   getOrganizationNames,
   getExecutionOwners,
   getCampaigns,
+  getAdminCredential,
+  updateAdminProfile,
+  resetCredentialPassword,
 } from "@/lib/db/actions";
 import { SyncControlPanel } from "@/components/sync/SyncControlPanel";
 
@@ -67,6 +71,23 @@ export const AdminSettingsPanel: React.FC<AdminSettingsPanelProps> = React.memo(
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Master Admin Account State
+  const [adminCred, setAdminCred] = useState<BrandCredential | null>(null);
+  const [adminEmailInput, setAdminEmailInput] = useState("");
+  const [adminPasswordInput, setAdminPasswordInput] = useState("");
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [isSavingAdminEmail, setIsSavingAdminEmail] = useState(false);
+  const [isSavingAdminPassword, setIsSavingAdminPassword] = useState(false);
+
+  // Quick Reset Password Modal State for any role
+  const [resetModalCred, setResetModalCred] = useState<BrandCredential | null>(null);
+  const [newPasswordInput, setNewPasswordInput] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+
+  // Copy Feedback state
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
   // Drawer state
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingCredential, setEditingCredential] = useState<BrandCredential | null>(null);
@@ -83,16 +104,22 @@ export const AdminSettingsPanel: React.FC<AdminSettingsPanelProps> = React.memo(
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [creds, orgs, owners, camps] = await Promise.all([
+      const [creds, orgs, owners, camps, masterAdmin] = await Promise.all([
         getCredentials(),
         getOrganizationNames(),
         getExecutionOwners(),
         getCampaigns("SUPER_ADMIN", "All Organizations"),
+        getAdminCredential(),
       ]);
       setCredentials(creds);
       setOrgNames(orgs);
       setExecutionOwners(owners);
       setAllCampaigns(camps);
+      if (masterAdmin) {
+        setAdminCred(masterAdmin);
+        setAdminEmailInput(masterAdmin.portal_username);
+        setAdminPasswordInput(masterAdmin.portal_password);
+      }
     } catch (err) {
       console.error("Failed to load credentials:", err);
     } finally {
@@ -107,6 +134,113 @@ export const AdminSettingsPanel: React.FC<AdminSettingsPanelProps> = React.memo(
   const showToast = (message: string, type: "success" | "error") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
+  };
+
+  const copyToClipboard = (text: string, id: string) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2500);
+    }
+  };
+
+  const handleCopyAdminCredentials = () => {
+    if (!adminCred) return;
+    const text = `Xcelerate Pulse — Master Admin Login\nPortal: https://xcelerate-pulse.vercel.app\nRole: Super Admin\nUsername / Email: ${adminEmailInput}\nPassword: ${adminPasswordInput}`;
+    copyToClipboard(text, "admin");
+    showToast("Master Admin credentials copied to clipboard!", "success");
+  };
+
+  const handleCopyRoleCredentials = (cred: BrandCredential) => {
+    const roleLabel = cred.role === "BRAND_CLIENT" ? "Brand Client" : cred.role === "AGENCY_CLIENT" ? "Agency Client" : cred.role === "EMPLOYEE" ? "Campaign Employee" : "Performance Analyst";
+    const text = `Xcelerate Pulse — Portal Access\nPortal: https://xcelerate-pulse.vercel.app\nOrganization: ${cred.org_name}\nRole: ${roleLabel}\nUsername / Email: ${cred.portal_username}\nPassword: ${cred.portal_password}`;
+    copyToClipboard(text, cred.id);
+    showToast(`Credentials for ${cred.org_name} copied!`, "success");
+  };
+
+  const handleSaveAdminEmail = async () => {
+    if (!adminEmailInput.trim()) {
+      showToast("Please enter a valid email", "error");
+      return;
+    }
+    setIsSavingAdminEmail(true);
+    try {
+      const res = await updateAdminProfile({ portal_username: adminEmailInput.trim() });
+      if (res.success && res.credential) {
+        setAdminCred(res.credential);
+        setAdminEmailInput(res.credential.portal_username);
+        showToast("Master Admin email updated successfully!", "success");
+        onCredentialsChanged?.();
+      } else {
+        showToast(res.error || "Failed to update email", "error");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Failed to update email", "error");
+    } finally {
+      setIsSavingAdminEmail(false);
+    }
+  };
+
+  const handleSaveAdminPassword = async () => {
+    if (!adminPasswordInput.trim() || adminPasswordInput.trim().length < 5) {
+      showToast("Password must be at least 5 characters", "error");
+      return;
+    }
+    setIsSavingAdminPassword(true);
+    try {
+      const res = await updateAdminProfile({ portal_password: adminPasswordInput.trim() });
+      if (res.success && res.credential) {
+        setAdminCred(res.credential);
+        setAdminPasswordInput(res.credential.portal_password);
+        showToast("Master Admin password updated successfully!", "success");
+        onCredentialsChanged?.();
+      } else {
+        showToast(res.error || "Failed to update password", "error");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Failed to update password", "error");
+    } finally {
+      setIsSavingAdminPassword(false);
+    }
+  };
+
+  const generateAdminPassword = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let rand = "";
+    for (let i = 0; i < 4; i++) rand += chars.charAt(Math.floor(Math.random() * chars.length));
+    const newPass = `Admin@Pulse${rand}!`;
+    setAdminPasswordInput(newPass);
+    setShowAdminPassword(true);
+  };
+
+  const openQuickResetModal = (cred: BrandCredential) => {
+    setResetModalCred(cred);
+    setNewPasswordInput(cred.portal_password);
+    setShowNewPassword(true);
+  };
+
+  const handleExecuteResetPassword = async () => {
+    if (!resetModalCred) return;
+    if (!newPasswordInput.trim() || newPasswordInput.trim().length < 4) {
+      showToast("Password must be at least 4 characters", "error");
+      return;
+    }
+    setIsResettingPassword(true);
+    try {
+      const res = await resetCredentialPassword(resetModalCred.id, newPasswordInput.trim());
+      if (res.success) {
+        showToast(`Password updated for ${resetModalCred.org_name}!`, "success");
+        setResetModalCred(null);
+        await loadData();
+        onCredentialsChanged?.();
+      } else {
+        showToast(res.error || "Failed to update password", "error");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Failed to update password", "error");
+    } finally {
+      setIsResettingPassword(false);
+    }
   };
 
   const togglePasswordVisibility = (id: string) => {
@@ -151,7 +285,10 @@ export const AdminSettingsPanel: React.FC<AdminSettingsPanelProps> = React.memo(
     setIsDrawerOpen(true);
   };
 
-  const filteredCredentials = credentials.filter((c) => {
+  // Only display client/employee/analyst roles in the credentials table below
+  const roleCredentials = credentials.filter((c) => c.role !== "SUPER_ADMIN");
+
+  const filteredCredentials = roleCredentials.filter((c) => {
     const q = searchQuery.toLowerCase();
     return (
       c.org_name.toLowerCase().includes(q) ||
@@ -160,8 +297,8 @@ export const AdminSettingsPanel: React.FC<AdminSettingsPanelProps> = React.memo(
     );
   });
 
-  const activeCount = credentials.filter((c) => c.is_active).length;
-  const disabledCount = credentials.filter((c) => !c.is_active).length;
+  const activeCount = roleCredentials.filter((c) => c.is_active).length;
+  const disabledCount = roleCredentials.filter((c) => !c.is_active).length;
 
   return (
     <div className="space-y-6">
@@ -225,6 +362,119 @@ export const AdminSettingsPanel: React.FC<AdminSettingsPanelProps> = React.memo(
           <Plus className="w-4 h-4" />
           <span>Create Credential</span>
         </button>
+      </div>
+
+      {/* ── Master Admin Security & Credentials Hub ── */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 rounded-2xl p-5 sm:p-6 text-white border border-slate-700/80 shadow-xl space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-700/60 pb-3.5">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 rounded-xl bg-blue-500/20 text-[#0052FF] border border-blue-500/30 shrink-0">
+              <ShieldCheck className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h3 className="text-sm sm:text-base font-black text-white">Master Admin Security &amp; Credentials</h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  ● Active Session
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium">
+                Manage master administrator email and platform password with zero backdoors
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleCopyAdminCredentials}
+            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-600 transition-all cursor-pointer shadow-xs shrink-0"
+            title="Copy master admin credentials to clipboard"
+          >
+            {copiedId === "admin" ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-emerald-400">Copied to Clipboard!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5 text-slate-400" />
+                <span>Copy Admin Login</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Inputs Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Admin Email */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-300 flex items-center space-x-1.5">
+              <Mail className="w-3.5 h-3.5 text-blue-400" />
+              <span>Admin Master Email / Username</span>
+            </label>
+            <div className="flex items-center space-x-2">
+              <input
+                type="email"
+                value={adminEmailInput}
+                onChange={(e) => setAdminEmailInput(e.target.value)}
+                className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-800/90 border border-slate-700 text-xs sm:text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-blue-400 transition-all"
+                placeholder="admin@xceleratemedia.in"
+              />
+              <button
+                type="button"
+                disabled={isSavingAdminEmail || adminEmailInput === adminCred?.portal_username}
+                onClick={handleSaveAdminEmail}
+                className="px-4 py-2.5 rounded-xl bg-[#0052FF] hover:bg-blue-600 disabled:opacity-40 disabled:hover:bg-[#0052FF] text-white text-xs font-bold transition-all cursor-pointer shrink-0"
+              >
+                {isSavingAdminEmail ? "Saving..." : "Save Email"}
+              </button>
+            </div>
+          </div>
+
+          {/* Admin Password */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-300 flex items-center space-x-1.5">
+                <Lock className="w-3.5 h-3.5 text-amber-400" />
+                <span>Admin Master Password</span>
+              </label>
+              <button
+                type="button"
+                onClick={generateAdminPassword}
+                className="text-[11px] font-semibold text-blue-400 hover:text-blue-300 flex items-center space-x-1 cursor-pointer"
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>Generate Strong</span>
+              </button>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="relative flex-1">
+                <input
+                  type={showAdminPassword ? "text" : "password"}
+                  value={adminPasswordInput}
+                  onChange={(e) => setAdminPasswordInput(e.target.value)}
+                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-slate-800/90 border border-slate-700 text-xs sm:text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-blue-400 transition-all"
+                  placeholder="••••••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAdminPassword(!showAdminPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+                >
+                  {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <button
+                type="button"
+                disabled={isSavingAdminPassword || !adminPasswordInput.trim() || adminPasswordInput === adminCred?.portal_password}
+                onClick={handleSaveAdminPassword}
+                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white text-xs font-bold transition-all cursor-pointer shrink-0"
+              >
+                {isSavingAdminPassword ? "Updating..." : "Update Password"}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Stats Row */}
@@ -394,11 +644,33 @@ export const AdminSettingsPanel: React.FC<AdminSettingsPanelProps> = React.memo(
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center space-x-1.5">
+                <div className="flex items-center space-x-1.5 flex-wrap">
+                  {/* Quick Copy Credentials Button */}
+                  <button
+                    onClick={() => handleCopyRoleCredentials(cred)}
+                    className="p-2 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-[#0052FF] transition-all cursor-pointer"
+                    title="Copy full credentials to clipboard"
+                  >
+                    {copiedId === cred.id ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+
+                  {/* Quick Update Password Button */}
+                  <button
+                    onClick={() => openQuickResetModal(cred)}
+                    className="p-2 rounded-lg hover:bg-amber-50 text-slate-400 hover:text-amber-600 transition-all cursor-pointer"
+                    title="Quick change / update password"
+                  >
+                    <KeyRound className="w-3.5 h-3.5" />
+                  </button>
+
                   <button
                     onClick={() => openEditDrawer(cred)}
                     className="p-2 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-[#0052FF] transition-all cursor-pointer"
-                    title="Edit credential"
+                    title="Edit credential details and access scope"
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
@@ -453,6 +725,99 @@ export const AdminSettingsPanel: React.FC<AdminSettingsPanelProps> = React.memo(
         }}
         onError={(msg) => showToast(msg, "error")}
       />
+
+      {/* ── Quick Password Reset Modal for Any Role ── */}
+      {resetModalCred && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 rounded-xl bg-blue-50 text-[#0052FF]">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-slate-900">Update Password</h4>
+                  <p className="text-[11px] text-slate-500 font-medium">{resetModalCred.org_name} ({resetModalCred.portal_username})</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setResetModalCred(null)}
+                className="w-7 h-7 rounded-full bg-slate-200/60 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-900 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Current Password reveal */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-medium">Current Password:</span>
+                <span className="font-mono font-bold text-slate-900">{resetModalCred.portal_password}</span>
+              </div>
+
+              {/* New Password input */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700">New Password</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const slug = resetModalCred.org_name.toLowerCase().replace(/[^a-z0-9]/g, "");
+                      const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+                      const prefix = resetModalCred.role === "EMPLOYEE" ? "Emp" : "Brand";
+                      setNewPasswordInput(`${prefix}@${(slug || "Pulse").toUpperCase()}${rand}!`);
+                      setShowNewPassword(true);
+                    }}
+                    className="text-[11px] font-bold text-[#0052FF] hover:underline flex items-center space-x-1 cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>Generate Strong</span>
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPasswordInput}
+                    onChange={(e) => setNewPasswordInput(e.target.value)}
+                    placeholder="Enter new password..."
+                    className="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-white border border-slate-200 text-sm font-mono text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0052FF]/20 focus:border-[#0052FF]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-end space-x-2">
+              <button
+                onClick={() => setResetModalCred(null)}
+                className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={isResettingPassword || !newPasswordInput.trim() || newPasswordInput.trim() === resetModalCred.portal_password}
+                onClick={handleExecuteResetPassword}
+                className="px-4 py-2 rounded-xl bg-[#0052FF] hover:bg-blue-600 disabled:opacity-50 text-white text-xs font-bold cursor-pointer transition-all shadow-xs flex items-center space-x-1.5"
+              >
+                {isResettingPassword ? (
+                  <span>Saving...</span>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Save New Password</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification */}
       {toast && (

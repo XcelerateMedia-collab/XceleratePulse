@@ -65,22 +65,11 @@ export default function Home() {
     return undefined;
   }, [role, selectedOrg, activeCredential, credentials]);
 
-  // Pre-load credentials on mount so landing page has brand options immediately
+  // Pre-load credentials on mount so internal sessions and switcher stay updated
   useEffect(() => {
     getCredentials()
       .then((creds) => setCredentials(creds))
       .catch((err) => console.error("Initial credentials load error:", err));
-
-    // Secret URL backdoor for internal agency team: ?admin=true or ?role=admin
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("admin") === "true" || params.get("role") === "admin") {
-        setRole("SUPER_ADMIN");
-        setSelectedOrg("All Organizations");
-        setActiveCredential(null);
-        setViewMode("portal");
-      }
-    }
   }, []);
 
   const handleEnterPlatform = useCallback((
