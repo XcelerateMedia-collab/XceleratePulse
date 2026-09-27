@@ -494,216 +494,216 @@ export const PerformanceAnalyticsView: React.FC<PerformanceAnalyticsViewProps> =
 
       {/* ── Dynamic KPI Summary Cards Based on Selected Milestone ── */}
       {activeMilestone === "overall" ? (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="space-y-3 sm:space-y-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
             {/* Total Views */}
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:border-blue-200 transition-all">
+            <div className="p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:border-blue-200 transition-all flex flex-col justify-between">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Reel Views</span>
-                <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-[#0052FF]">
-                  <Eye className="w-4 h-4" />
+                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Total Views</span>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-blue-50 flex items-center justify-center text-[#0052FF] shrink-0">
+                  <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </div>
               </div>
-              <div className="text-3xl font-black text-slate-900 mt-2 tracking-tight">
+              <div className="text-2xl sm:text-3xl font-black text-slate-900 mt-1.5 sm:mt-2 tracking-tight">
                 {formatNumber(totalViews)}
               </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 font-medium">
-                <span>Across {liveCreatorsCount} active reel(s)</span>
-                <span className="font-bold text-[#0052FF]">Mature Total</span>
+              <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 font-medium">
+                <span className="truncate">{liveCreatorsCount} active reel(s)</span>
+                <span className="font-bold text-[#0052FF] shrink-0">Mature</span>
               </div>
             </div>
 
             {/* Account Reach */}
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:border-cyan-200 transition-all">
+            <div className="p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:border-cyan-200 transition-all flex flex-col justify-between">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Unique Account Reach</span>
-                <div className="w-8 h-8 rounded-xl bg-cyan-50 flex items-center justify-center text-cyan-600">
-                  <Users className="w-4 h-4" />
+                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Total Reach</span>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-cyan-50 flex items-center justify-center text-cyan-600 shrink-0">
+                  <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </div>
               </div>
-              <div className="text-3xl font-black text-slate-900 mt-2 tracking-tight">
+              <div className="text-2xl sm:text-3xl font-black text-slate-900 mt-1.5 sm:mt-2 tracking-tight">
                 {formatNumber(totalReach)}
               </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 font-medium">
-                <span>Instagram viewer impressions</span>
-                <span className="font-bold text-cyan-600">Audience</span>
+              <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 font-medium">
+                <span className="truncate">Unique Viewers</span>
+                <span className="font-bold text-cyan-600 shrink-0">Audience</span>
               </div>
             </div>
 
             {/* Overall Avg ER */}
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:border-emerald-200 transition-all">
+            <div className="p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:border-emerald-200 transition-all flex flex-col justify-between">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Avg Engagement Rate</span>
-                <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-                  <TrendingUp className="w-4 h-4" />
+                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Avg ER (%)</span>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                  <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </div>
               </div>
-              <div className="text-3xl font-black text-emerald-600 mt-2 tracking-tight">
+              <div className="text-2xl sm:text-3xl font-black text-emerald-600 mt-1.5 sm:mt-2 tracking-tight">
                 {overallAvgEr}%
               </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 font-medium">
-                <span>Interactions per view ratio</span>
-                <span className="font-bold text-emerald-600">High Impact</span>
+              <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 font-medium">
+                <span className="truncate">Interactions ratio</span>
+                <span className="font-bold text-emerald-600 shrink-0">High Impact</span>
               </div>
             </div>
 
             {/* Total Interactions */}
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:border-indigo-200 transition-all">
+            <div className="p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:border-indigo-200 transition-all flex flex-col justify-between">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Interactions</span>
-                <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                  <Compass className="w-4 h-4" />
+                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Interactions</span>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+                  <Compass className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </div>
               </div>
-              <div className="text-3xl font-black text-slate-900 mt-2 tracking-tight">
+              <div className="text-2xl sm:text-3xl font-black text-slate-900 mt-1.5 sm:mt-2 tracking-tight">
                 {formatNumber(totalInteractions)}
               </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 font-medium">
-                <span>Likes, comments, saves &amp; shares</span>
-                <span className="font-bold text-indigo-600">Reactions</span>
+              <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 font-medium">
+                <span className="truncate">Likes, saves, shares</span>
+                <span className="font-bold text-indigo-600 shrink-0">Reactions</span>
               </div>
             </div>
           </div>
 
           {/* Reactions Breakdown */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-            <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs">
-              <div className="flex items-center space-x-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                <Heart className="w-4 h-4 text-pink-500" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3.5">
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs">
+              <div className="flex items-center space-x-2 text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <Heart className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-pink-500 shrink-0" />
                 <span>Likes</span>
               </div>
-              <div className="text-2xl font-black text-slate-900 mt-1.5">{formatNumber(totalLikes)}</div>
-              <div className="text-[11px] text-slate-500 mt-0.5 font-medium">Organic appreciation</div>
+              <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1 sm:mt-1.5">{formatNumber(totalLikes)}</div>
+              <div className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 font-medium truncate">Organic appreciation</div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs">
-              <div className="flex items-center space-x-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                <MessageCircle className="w-4 h-4 text-cyan-600" />
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs">
+              <div className="flex items-center space-x-2 text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-600 shrink-0" />
                 <span>Comments</span>
               </div>
-              <div className="text-2xl font-black text-slate-900 mt-1.5">{formatNumber(totalComments)}</div>
-              <div className="text-[11px] text-slate-500 mt-0.5 font-medium">Direct conversations</div>
+              <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1 sm:mt-1.5">{formatNumber(totalComments)}</div>
+              <div className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 font-medium truncate">Direct conversations</div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs">
-              <div className="flex items-center space-x-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                <Bookmark className="w-4 h-4 text-amber-600" />
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs">
+              <div className="flex items-center space-x-2 text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <Bookmark className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600 shrink-0" />
                 <span>Saves</span>
               </div>
-              <div className="text-2xl font-black text-slate-900 mt-1.5">{formatNumber(totalSaves)}</div>
-              <div className="text-[11px] text-amber-700 mt-0.5 font-bold">Purchase &amp; intent signal</div>
+              <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1 sm:mt-1.5">{formatNumber(totalSaves)}</div>
+              <div className="text-[10px] sm:text-[11px] text-amber-700 mt-0.5 font-bold truncate">Purchase &amp; intent signal</div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs">
-              <div className="flex items-center space-x-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                <Share2 className="w-4 h-4 text-[#0052FF]" />
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs">
+              <div className="flex items-center space-x-2 text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0052FF] shrink-0" />
                 <span>Shares</span>
               </div>
-              <div className="text-2xl font-black text-slate-900 mt-1.5">{formatNumber(totalShares)}</div>
-              <div className="text-[11px] text-[#0052FF] mt-0.5 font-bold">Viral propagation</div>
+              <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1 sm:mt-1.5">{formatNumber(totalShares)}</div>
+              <div className="text-[10px] sm:text-[11px] text-[#0052FF] mt-0.5 font-bold truncate">Viral propagation</div>
             </div>
           </div>
         </div>
       ) : activeMilestone === "7d" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-50/60 to-white border border-blue-200/90 shadow-xs">
-            <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">Day 7 Total Views</span>
-            <div className="text-3xl font-black text-slate-900 mt-2 tracking-tight">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+          <div className="p-3.5 sm:p-5 rounded-2xl bg-gradient-to-br from-blue-50/60 to-white border border-blue-200/90 shadow-xs flex flex-col justify-between">
+            <span className="text-[10px] sm:text-xs font-bold text-blue-700 uppercase tracking-wider">Day 7 Views</span>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 mt-1.5 sm:mt-2 tracking-tight">
               {formatNumber(day7TotalViews)}
             </div>
-            <div className="text-[11px] text-slate-500 mt-2 font-medium">Launch week organic velocity</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 font-medium truncate">Launch week velocity</div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50/60 to-white border border-emerald-200/90 shadow-xs">
-            <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Day 7 Avg ER (%)</span>
-            <div className="text-3xl font-black text-emerald-600 mt-2 tracking-tight">
+          <div className="p-3.5 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-50/60 to-white border border-emerald-200/90 shadow-xs flex flex-col justify-between">
+            <span className="text-[10px] sm:text-xs font-bold text-emerald-700 uppercase tracking-wider">Day 7 ER (%)</span>
+            <div className="text-2xl sm:text-3xl font-black text-emerald-600 mt-1.5 sm:mt-2 tracking-tight">
               {day7AvgEr}%
             </div>
-            <div className="text-[11px] text-slate-500 mt-2 font-medium">Initial audience engagement response</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 font-medium truncate">Audience engagement</div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Logged Creators</span>
-            <div className="text-3xl font-black text-slate-900 mt-2 tracking-tight">
-              {day7LoggedCount} <span className="text-sm font-semibold text-slate-400">/ {deliverables.length}</span>
+          <div className="p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between">
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Logged</span>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 mt-1.5 sm:mt-2 tracking-tight">
+              {day7LoggedCount} <span className="text-xs sm:text-sm font-semibold text-slate-400">/ {deliverables.length}</span>
             </div>
-            <div className="text-[11px] text-slate-500 mt-2 font-medium">Creators with Day 7 data filled</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 font-medium truncate">Creators with Day 7 data</div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Verified Screenshots</span>
-            <div className="text-3xl font-black text-[#0052FF] mt-2 tracking-tight">
+          <div className="p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between">
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Screenshots</span>
+            <div className="text-2xl sm:text-3xl font-black text-[#0052FF] mt-1.5 sm:mt-2 tracking-tight">
               {day7ScreenshotCount}
             </div>
-            <div className="text-[11px] text-slate-500 mt-2 font-medium">Day 7 Insight proofs on record</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 font-medium truncate">Insight proofs on record</div>
           </div>
         </div>
       ) : activeMilestone === "15d" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-5 rounded-2xl bg-gradient-to-br from-cyan-50/60 to-white border border-cyan-200/90 shadow-xs">
-            <span className="text-xs font-bold text-cyan-700 uppercase tracking-wider">Day 15 Total Views</span>
-            <div className="text-3xl font-black text-slate-900 mt-2 tracking-tight">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+          <div className="p-3.5 sm:p-5 rounded-2xl bg-gradient-to-br from-cyan-50/60 to-white border border-cyan-200/90 shadow-xs flex flex-col justify-between">
+            <span className="text-[10px] sm:text-xs font-bold text-cyan-700 uppercase tracking-wider">Day 15 Views</span>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 mt-1.5 sm:mt-2 tracking-tight">
               {formatNumber(day15TotalViews)}
             </div>
-            <div className="text-[11px] text-slate-500 mt-2 font-medium">Algorithm expansion mid-flight total</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 font-medium truncate">Mid-flight expansion</div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50/60 to-white border border-emerald-200/90 shadow-xs">
-            <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Day 15 Avg ER (%)</span>
-            <div className="text-3xl font-black text-emerald-600 mt-2 tracking-tight">
+          <div className="p-3.5 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-50/60 to-white border border-emerald-200/90 shadow-xs flex flex-col justify-between">
+            <span className="text-[10px] sm:text-xs font-bold text-emerald-700 uppercase tracking-wider">Day 15 ER (%)</span>
+            <div className="text-2xl sm:text-3xl font-black text-emerald-600 mt-1.5 sm:mt-2 tracking-tight">
               {day15AvgEr}%
             </div>
-            <div className="text-[11px] text-slate-500 mt-2 font-medium">Sustained mid-flight engagement</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 font-medium truncate">Sustained response</div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Logged Creators</span>
-            <div className="text-3xl font-black text-slate-900 mt-2 tracking-tight">
-              {day15LoggedCount} <span className="text-sm font-semibold text-slate-400">/ {deliverables.length}</span>
+          <div className="p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between">
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Logged</span>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 mt-1.5 sm:mt-2 tracking-tight">
+              {day15LoggedCount} <span className="text-xs sm:text-sm font-semibold text-slate-400">/ {deliverables.length}</span>
             </div>
-            <div className="text-[11px] text-slate-500 mt-2 font-medium">Creators with Day 15 data filled</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 font-medium truncate">Creators with Day 15 data</div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Verified Screenshots</span>
-            <div className="text-3xl font-black text-[#00A3FF] mt-2 tracking-tight">
+          <div className="p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between">
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Screenshots</span>
+            <div className="text-2xl sm:text-3xl font-black text-[#00A3FF] mt-1.5 sm:mt-2 tracking-tight">
               {day15ScreenshotCount}
             </div>
-            <div className="text-[11px] text-slate-500 mt-2 font-medium">Day 15 Insight proofs on record</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 font-medium truncate">Insight proofs on record</div>
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50/60 to-white border border-emerald-200/90 shadow-xs">
-            <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Day 30 Total Views</span>
-            <div className="text-3xl font-black text-slate-900 mt-2 tracking-tight">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+          <div className="p-3.5 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-50/60 to-white border border-emerald-200/90 shadow-xs flex flex-col justify-between">
+            <span className="text-[10px] sm:text-xs font-bold text-emerald-700 uppercase tracking-wider">Day 30 Views</span>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 mt-1.5 sm:mt-2 tracking-tight">
               {formatNumber(day30TotalViews || totalViews)}
             </div>
-            <div className="text-[11px] text-slate-500 mt-2 font-medium">Evergreen mature campaign wrap</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 font-medium truncate">Evergreen wrap</div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50/60 to-white border border-emerald-200/90 shadow-xs">
-            <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Day 30 Avg ER (%)</span>
-            <div className="text-3xl font-black text-emerald-600 mt-2 tracking-tight">
+          <div className="p-3.5 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-50/60 to-white border border-emerald-200/90 shadow-xs flex flex-col justify-between">
+            <span className="text-[10px] sm:text-xs font-bold text-emerald-700 uppercase tracking-wider">Day 30 ER (%)</span>
+            <div className="text-2xl sm:text-3xl font-black text-emerald-600 mt-1.5 sm:mt-2 tracking-tight">
               {day30AvgEr || overallAvgEr}%
             </div>
-            <div className="text-[11px] text-slate-500 mt-2 font-medium">Mature engagement benchmark</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 font-medium truncate">Mature benchmark</div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Logged Creators</span>
-            <div className="text-3xl font-black text-slate-900 mt-2 tracking-tight">
-              {day30LoggedCount} <span className="text-sm font-semibold text-slate-400">/ {deliverables.length}</span>
+          <div className="p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between">
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Logged</span>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 mt-1.5 sm:mt-2 tracking-tight">
+              {day30LoggedCount} <span className="text-xs sm:text-sm font-semibold text-slate-400">/ {deliverables.length}</span>
             </div>
-            <div className="text-[11px] text-slate-500 mt-2 font-medium">Creators with Day 30 data filled</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 font-medium truncate">Creators with Day 30 data</div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Verified Screenshots</span>
-            <div className="text-3xl font-black text-emerald-600 mt-2 tracking-tight">
+          <div className="p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between">
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Screenshots</span>
+            <div className="text-2xl sm:text-3xl font-black text-emerald-600 mt-1.5 sm:mt-2 tracking-tight">
               {day30ScreenshotCount}
             </div>
-            <div className="text-[11px] text-slate-500 mt-2 font-medium">Day 30 Insight proofs on record</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 font-medium truncate">Insight proofs on record</div>
           </div>
         </div>
       )}
@@ -711,12 +711,12 @@ export const PerformanceAnalyticsView: React.FC<PerformanceAnalyticsViewProps> =
 
 
       {/* ── Creator Reel Performance Leaderboard (WITH CONTAINED SCROLL & PAGINATION) ── */}
-      <div id="creator-reel-performance-leaderboard" className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+      <div id="creator-reel-performance-leaderboard" className="p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3.5 sm:space-y-4">
         
         {/* Leaderboard Controls Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex items-center space-x-2">
-            <Award className="w-5 h-5 text-amber-500" />
+            <Award className="w-5 h-5 text-amber-500 shrink-0" />
             <div>
               <h4 className="text-sm font-black text-slate-900">
                 Creator Reel Performance Leaderboard
@@ -727,12 +727,12 @@ export const PerformanceAnalyticsView: React.FC<PerformanceAnalyticsViewProps> =
             </div>
           </div>
 
-          {/* Quick Metrics Status Filter: All / Due Now / With Metrics / No Metrics */}
-          <div className="flex items-center p-1 rounded-xl bg-slate-100/90 border border-slate-200 text-xs font-bold gap-1">
+          {/* Quick Metrics Status Filter: All / Due Now / With Metrics / No Metrics — with smooth horizontal swipe on mobile */}
+          <div className="flex items-center p-1 rounded-xl bg-slate-100/90 border border-slate-200 text-xs font-bold gap-1 overflow-x-auto max-w-full no-scrollbar shrink-0">
             <button
               type="button"
               onClick={() => { setMetricsStatusFilter("ALL"); setCurrentPage(1); }}
-              className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center space-x-1.5 ${
+              className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center space-x-1.5 whitespace-nowrap shrink-0 ${
                 metricsStatusFilter === "ALL"
                   ? "bg-white text-slate-900 shadow-xs font-black ring-1 ring-slate-200/60"
                   : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
@@ -750,7 +750,7 @@ export const PerformanceAnalyticsView: React.FC<PerformanceAnalyticsViewProps> =
               <button
                 type="button"
                 onClick={() => { setMetricsStatusFilter("DUE_NOW"); setCurrentPage(1); }}
-                className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center space-x-1.5 ${
+                className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center space-x-1.5 whitespace-nowrap shrink-0 ${
                   metricsStatusFilter === "DUE_NOW"
                     ? "bg-amber-500 text-white shadow-xs font-black"
                     : "text-amber-700 hover:text-amber-900 hover:bg-amber-100/60"
@@ -759,7 +759,7 @@ export const PerformanceAnalyticsView: React.FC<PerformanceAnalyticsViewProps> =
                 <Zap className={`w-3.5 h-3.5 shrink-0 ${metricsStatusFilter === "DUE_NOW" ? "text-white fill-white" : "text-amber-500 fill-amber-500"}`} />
                 <span>Due Now</span>
                 <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                  metricsStatusFilter === "DUE_NOW" ? "bg-white text-amber-700" : "bg-amber-200 text-amber-900 animate-pulse"
+                  metricsStatusFilter === "DUE_NOW" ? "bg-white text-amber-700" : "bg-amber-200 text-amber-900"
                 }`}>
                   {milestonesDueSummary.totalDue}
                 </span>
@@ -769,7 +769,7 @@ export const PerformanceAnalyticsView: React.FC<PerformanceAnalyticsViewProps> =
             <button
               type="button"
               onClick={() => { setMetricsStatusFilter("LOGGED"); setCurrentPage(1); }}
-              className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center space-x-1.5 ${
+              className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center space-x-1.5 whitespace-nowrap shrink-0 ${
                 metricsStatusFilter === "LOGGED"
                   ? "bg-white text-emerald-700 shadow-xs font-black ring-1 ring-slate-200/60"
                   : "text-slate-600 hover:text-emerald-700 hover:bg-slate-200/50"
@@ -787,7 +787,7 @@ export const PerformanceAnalyticsView: React.FC<PerformanceAnalyticsViewProps> =
             <button
               type="button"
               onClick={() => { setMetricsStatusFilter("MISSING"); setCurrentPage(1); }}
-              className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center space-x-1.5 ${
+              className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center space-x-1.5 whitespace-nowrap shrink-0 ${
                 metricsStatusFilter === "MISSING"
                   ? "bg-white text-amber-800 shadow-xs font-black ring-1 ring-amber-300"
                   : "text-slate-600 hover:text-amber-800 hover:bg-amber-100/50"
@@ -807,16 +807,16 @@ export const PerformanceAnalyticsView: React.FC<PerformanceAnalyticsViewProps> =
             </button>
           </div>
           
-          <div className="flex flex-wrap items-center gap-2.5 text-xs">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 text-xs w-full md:w-auto">
             {/* Search Input */}
-            <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200">
-              <Search className="w-3.5 h-3.5 text-slate-400" />
+            <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 flex-1 min-w-[140px]">
+              <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <input
                 type="text"
                 placeholder="Search creator, niche..."
                 value={searchQuery}
                 onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                className="bg-transparent border-none text-xs text-slate-900 placeholder-slate-400 focus:outline-none w-36 font-medium"
+                className="bg-transparent border-none text-xs text-slate-900 placeholder-slate-400 focus:outline-none w-full font-medium"
               />
             </div>
 
@@ -824,7 +824,7 @@ export const PerformanceAnalyticsView: React.FC<PerformanceAnalyticsViewProps> =
             <select
               value={categoryFilter}
               onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
-              className="px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer"
+              className="px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer flex-1 sm:flex-initial"
             >
               <option value="ALL">All Categories</option>
               <option value="Mega">Mega (1M+)</option>
@@ -837,7 +837,7 @@ export const PerformanceAnalyticsView: React.FC<PerformanceAnalyticsViewProps> =
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer"
+              className="px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer flex-1 sm:flex-initial"
             >
               <option value="views">Sort by Views</option>
               <option value="er">Sort by ER (%)</option>
@@ -861,47 +861,56 @@ export const PerformanceAnalyticsView: React.FC<PerformanceAnalyticsViewProps> =
           </div>
         </div>
 
+        {/* Mobile Swipe Guidance Indicator */}
+        <div className="sm:hidden flex items-center justify-between text-[11px] text-slate-500 font-medium px-1 bg-slate-50/70 py-1 rounded-lg border border-slate-200/60">
+          <span className="flex items-center space-x-1">
+            <ArrowRight className="w-3.5 h-3.5 text-[#0052FF]" />
+            <span>Swipe table sideways to view all metrics</span>
+          </span>
+          <span className="text-[10px] text-slate-400 font-mono">11 Columns</span>
+        </div>
+
         {/* ── CONTAINED SCROLL CONTAINER WITH STICKY HEADER ── */}
         <div className="max-h-[580px] overflow-y-auto overflow-x-auto rounded-xl border border-slate-200/90 custom-scrollbar overscroll-contain shadow-2xs">
-          <table className="w-full text-left text-xs border-collapse">
+          <table className="w-full min-w-[850px] text-left text-xs border-collapse">
             <thead className="sticky top-0 bg-slate-50 z-20 border-b border-slate-200 shadow-xs">
-              <tr className="text-slate-500 font-bold uppercase text-[10px] tracking-wider">
-                <th className="py-3 px-3.5 bg-slate-50">Rank &amp; Creator</th>
-                <th className="py-3 px-3 bg-slate-50">Milestone Schedule</th>
+              <tr className="text-slate-500 font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">
+                <th className="py-3 px-3.5 bg-slate-50 whitespace-nowrap">Rank &amp; Creator</th>
+                <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Milestone Schedule</th>
                 {activeMilestone === "overall" ? (
                   <>
-                    <th className="py-3 px-3 bg-slate-50">Total Views</th>
-                    <th className="py-3 px-3 bg-slate-50">Likes</th>
-                    <th className="py-3 px-3 bg-slate-50">Comments</th>
-                    <th className="py-3 px-3 bg-slate-50">Saves</th>
-                    <th className="py-3 px-3 bg-slate-50">Shares</th>
-                    <th className="py-3 px-3 bg-slate-50">Avg Watch Time</th>
-                    <th className="py-3 px-3 bg-slate-50">ER (%)</th>
-                    <th className="py-3 px-3 bg-slate-50">Account Reach</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Total Views</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Likes</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Comments</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Saves</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Shares</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Avg Watch Time</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">ER (%)</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Account Reach</th>
                   </>
                 ) : activeMilestone === "7d" ? (
                   <>
-                    <th className="py-3 px-3 bg-slate-50">Day 7 Views</th>
-                    <th className="py-3 px-3 bg-slate-50">Day 7 ER (%)</th>
-                    <th className="py-3 px-3 bg-slate-50">Day 7 Proof</th>
-                    <th className="py-3 px-3 bg-slate-50">Total Mature Views</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Day 7 Views</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Day 7 ER (%)</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Day 7 Proof</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Total Mature Views</th>
                   </>
                 ) : activeMilestone === "15d" ? (
                   <>
-                    <th className="py-3 px-3 bg-slate-50">Day 15 Views</th>
-                    <th className="py-3 px-3 bg-slate-50">Day 15 ER (%)</th>
-                    <th className="py-3 px-3 bg-slate-50">Day 15 Proof</th>
-                    <th className="py-3 px-3 bg-slate-50">Total Mature Views</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Day 15 Views</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Day 15 ER (%)</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Day 15 Proof</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Total Mature Views</th>
                   </>
                 ) : (
                   <>
-                    <th className="py-3 px-3 bg-slate-50">Day 30 Views</th>
-                    <th className="py-3 px-3 bg-slate-50">Day 30 ER (%)</th>
-                    <th className="py-3 px-3 bg-slate-50">Day 30 Proof</th>
-                    <th className="py-3 px-3 bg-slate-50">Total Mature Views</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Day 30 Views</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Day 30 ER (%)</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Day 30 Proof</th>
+                    <th className="py-3 px-3 bg-slate-50 whitespace-nowrap">Total Mature Views</th>
                   </>
                 )}
-                <th className="py-3 px-3.5 text-right bg-slate-50">Proof / Actions</th>
+                <th className="py-3 px-3.5 text-right bg-slate-50 whitespace-nowrap">Proof / Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">

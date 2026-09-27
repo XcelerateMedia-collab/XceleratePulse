@@ -975,45 +975,45 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
         </div>
 
         {/* View Mode Switcher — Cards / Master Table / Pipeline */}
-        <div className="flex items-center space-x-1 p-1 rounded-xl bg-slate-100 border border-slate-200 self-start sm:self-auto shrink-0">
+        <div className="flex items-center space-x-1 p-1 rounded-xl bg-slate-100 border border-slate-200 w-full sm:w-auto shrink-0">
           <button
             onClick={() => setViewMode("cards")}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               viewMode === "cards"
                 ? "bg-white text-[#0052FF] shadow-xs"
                 : "text-slate-600 hover:text-slate-900"
             }`}
             title="Creator cards overview"
           >
-            <Layers className="w-3.5 h-3.5" />
+            <Layers className="w-3.5 h-3.5 shrink-0" />
             <span className="hidden sm:inline">Cards View</span>
             <span className="sm:hidden">Cards</span>
           </button>
 
           <button
             onClick={() => setViewMode("table")}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               viewMode === "table"
                 ? "bg-white text-[#0052FF] shadow-xs"
                 : "text-slate-600 hover:text-slate-900"
             }`}
             title="Desktop tabular view"
           >
-            <TableIcon className="w-3.5 h-3.5" />
+            <TableIcon className="w-3.5 h-3.5 shrink-0" />
             <span className="hidden sm:inline">Master Table</span>
             <span className="sm:hidden">Table</span>
           </button>
 
           <button
             onClick={() => setViewMode("kanban")}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               viewMode === "kanban"
                 ? "bg-white text-[#0052FF] shadow-xs"
                 : "text-slate-600 hover:text-slate-900"
             }`}
             title="Kanban stage progression"
           >
-            <Kanban className="w-3.5 h-3.5" />
+            <Kanban className="w-3.5 h-3.5 shrink-0" />
             <span className="hidden sm:inline">Stage Pipeline</span>
             <span className="sm:hidden">Pipeline</span>
           </button>
@@ -1091,23 +1091,25 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
             </button>
           )}
 
-          {/* Showing Count Badge */}
-          <div className="h-9 px-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center text-xs text-slate-600 whitespace-nowrap font-medium select-none shadow-2xs">
-            <span>
-              Showing <strong className="text-slate-900 font-bold">{filtered.length}</strong> of {deliverables.length}
-            </span>
-          </div>
+          {/* Showing Count & Export CSV Row */}
+          <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-start">
+            <div className="h-9 px-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center text-xs text-slate-600 whitespace-nowrap font-medium select-none shadow-2xs flex-1 sm:flex-initial justify-center sm:justify-start">
+              <span>
+                Showing <strong className="text-slate-900 font-bold">{filtered.length}</strong> of {deliverables.length}
+              </span>
+            </div>
 
-          {/* Export CSV Button */}
-          <button
-            type="button"
-            onClick={exportPipelineCsv}
-            className="h-9 flex items-center space-x-1.5 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all cursor-pointer shadow-xs whitespace-nowrap active:scale-98"
-            title="Download CSV report of current filtered view"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export CSV</span>
-          </button>
+            {/* Export CSV Button */}
+            <button
+              type="button"
+              onClick={exportPipelineCsv}
+              className="h-9 flex items-center space-x-1.5 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all cursor-pointer shadow-xs whitespace-nowrap active:scale-98 shrink-0"
+              title="Download CSV report of current filtered view"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export CSV</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1953,368 +1955,118 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
             </button>
           </div>
         ) : (
-        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ${column5Items.length > 0 ? "xl:grid-cols-5" : "xl:grid-cols-4"} gap-3.5 items-start`}>
-          
-          {/* Column 1: Onboarding & Scripting */}
-          <div className="flex flex-col bg-slate-100/70 p-2 sm:p-2.5 rounded-2xl border border-slate-200/80">
-            <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between shadow-xs mb-2 shrink-0">
-              <div className="flex items-center space-x-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
-                <span className="text-xs font-black text-slate-900 uppercase tracking-wider">1. Scripting Stage</span>
-              </div>
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                {column1Items.length}
+        <div className="space-y-2.5">
+          {/* Mobile Stage Progression Quick Carousel / Tab Selector */}
+          <div className="md:hidden space-y-1.5 mb-1">
+            <div className="flex items-center justify-between text-[11px] text-slate-500 font-semibold px-0.5">
+              <span className="flex items-center space-x-1">
+                <Kanban className="w-3 h-3 text-[#0052FF]" />
+                <span>Stage Progression ({deliverables.length})</span>
               </span>
+              <span className="text-[10px] text-slate-400">Swipe or tap tab</span>
             </div>
 
-            <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-320px)] min-h-[460px] pr-1">
-              {column1Items.length > 0 ? (
-                column1Items.map(item => (
-                  <div 
-                    key={item.id} 
-                    onClick={() => setSelectedCreator(item)}
-                    className="p-3 rounded-2xl glass-panel-light glass-panel-light-hover cursor-pointer"
-                  >
-                    {/* Brand & Campaign Pill */}
-                    {(item.org_name || item.campaign_name) && (
-                      <div className="flex items-center space-x-1 text-[9px] font-semibold mb-1 truncate">
-                        <span className="px-1.5 py-0.2 rounded bg-blue-50 text-[#0052FF] border border-blue-200/60 font-bold truncate max-w-[85px]">
-                          {item.org_name || "Brand"}
-                        </span>
-                        {item.campaign_name && (
-                          <span className="text-slate-400 truncate max-w-[95px]" title={item.campaign_name}>
-                            • {item.campaign_name}
-                          </span>
-                        )}
-                      </div>
-                    )}
+            <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar py-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  document.getElementById("kanban-column-1")?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+                }}
+                className="px-2.5 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 flex items-center space-x-1.5 shrink-0 shadow-2xs hover:border-blue-300 cursor-pointer active:scale-95 transition-all"
+              >
+                <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0"></span>
+                <span>1. Scripting</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-700 font-mono text-[10px] font-bold">{column1Items.length}</span>
+              </button>
 
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="font-extrabold text-xs text-slate-900 truncate" title={item.creator_name}>{item.creator_name}</span>
-                      {item.category && item.category !== "Unspecified" && item.followers_count > 0 && (
-                        <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-blue-50 text-[#0052FF] font-black shrink-0">{item.category}</span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-slate-500 font-medium mt-0.5 truncate">
-                      {item.niche || "General"} {item.followers_count > 0 ? `• ${formatFollowers(item.followers_count)}` : ""}
-                    </div>
-                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                      {getScriptStatusBadge(item.script_status)}
-                      {(() => {
-                        const info = getScriptLinkInfo(item.script_link);
-                        if (!info) return null;
-                        return (
-                          <a 
-                            href={info.href}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={e => e.stopPropagation()}
-                            className="text-[11px] text-[#0052FF] font-semibold hover:underline flex items-center space-x-1 shrink-0"
-                          >
-                            <FileText className="w-3 h-3" />
-                            <span>{info.label.replace(" ↗", "")}</span>
-                          </a>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="p-6 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 text-center text-xs text-slate-400 font-medium">
-                  No creators matching filters
-                </div>
+              <button
+                type="button"
+                onClick={() => {
+                  document.getElementById("kanban-column-2")?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+                }}
+                className="px-2.5 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 flex items-center space-x-1.5 shrink-0 shadow-2xs hover:border-purple-300 cursor-pointer active:scale-95 transition-all"
+              >
+                <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0"></span>
+                <span>2. Drafts</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-700 font-mono text-[10px] font-bold">{column2Items.length}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  document.getElementById("kanban-column-3")?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+                }}
+                className="px-2.5 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 flex items-center space-x-1.5 shrink-0 shadow-2xs hover:border-emerald-300 cursor-pointer active:scale-95 transition-all"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                <span>3. Approved</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-700 font-mono text-[10px] font-bold">{column3Items.length}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  document.getElementById("kanban-column-4")?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+                }}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 shrink-0 shadow-2xs cursor-pointer active:scale-95 transition-all border ${
+                  column4Items.length > 0
+                    ? "bg-blue-50 border-blue-200 text-[#0052FF]"
+                    : "bg-white border-slate-200 text-slate-700 hover:border-blue-300"
+                }`}
+              >
+                <span className="live-indicator-dot shrink-0"></span>
+                <span>4. Live &amp; Stats</span>
+                <span className={`px-1.5 py-0.2 rounded-full font-mono text-[10px] font-bold ${
+                  column4Items.length > 0 ? "bg-blue-100 text-[#0052FF]" : "bg-slate-100 text-slate-700"
+                }`}>{column4Items.length}</span>
+              </button>
+
+              {column5Items.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    document.getElementById("kanban-column-5")?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700 flex items-center space-x-1.5 shrink-0 shadow-2xs hover:border-rose-300 cursor-pointer active:scale-95 transition-all"
+                >
+                  <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
+                  <span>5. Dropped</span>
+                  <span className="px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-700 font-mono text-[10px] font-bold">{column5Items.length}</span>
+                </button>
               )}
             </div>
           </div>
 
-          {/* Column 2: Video 1st Draft & Revisions */}
-          <div className="flex flex-col bg-slate-100/70 p-2 sm:p-2.5 rounded-2xl border border-slate-200/80">
-            <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between shadow-xs mb-2 shrink-0">
-              <div className="flex items-center space-x-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
-                <span className="text-xs font-black text-slate-900 uppercase tracking-wider">2. Draft &amp; Reshoot</span>
-              </div>
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                {column2Items.length}
-              </span>
-            </div>
-
-            <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-320px)] min-h-[460px] pr-1">
-              {column2Items.length > 0 ? (
-                column2Items.map(item => (
-                  <div 
-                    key={item.id} 
-                    onClick={() => setSelectedCreator(item)}
-                    className="p-3 rounded-2xl glass-panel-light glass-panel-light-hover cursor-pointer"
-                  >
-                    {/* Brand & Campaign Pill */}
-                    {(item.org_name || item.campaign_name) && (
-                      <div className="flex items-center space-x-1 text-[9px] font-semibold mb-1 truncate">
-                        <span className="px-1.5 py-0.2 rounded bg-blue-50 text-[#0052FF] border border-blue-200/60 font-bold truncate max-w-[85px]">
-                          {item.org_name || "Brand"}
-                        </span>
-                        {item.campaign_name && (
-                          <span className="text-slate-400 truncate max-w-[95px]" title={item.campaign_name}>
-                            • {item.campaign_name}
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="font-extrabold text-xs text-slate-900 truncate" title={item.creator_name}>{item.creator_name}</span>
-                      {item.category && item.category !== "Unspecified" && item.followers_count > 0 && (
-                        <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-blue-50 text-[#0052FF] font-black shrink-0">{item.category}</span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-slate-500 font-medium mt-0.5 truncate">
-                      {item.niche || "General"} {item.followers_count > 0 ? `• ${formatFollowers(item.followers_count)}` : ""}
-                    </div>
-                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                      {getDraftStatusBadge(item.first_draft_status)}
-                      {item.revision_drive_link && (
-                        <a 
-                          href={item.revision_drive_link}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={e => e.stopPropagation()}
-                          className="text-[11px] text-purple-600 font-semibold hover:underline flex items-center space-x-1 shrink-0"
-                        >
-                          <FolderOpen className="w-3 h-3" />
-                          <span>Revisions</span>
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="p-6 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 text-center text-xs text-slate-400 font-medium">
-                  No creators matching filters
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Column 3: Final Video Approved */}
-          <div className="flex flex-col bg-slate-100/70 p-2 sm:p-2.5 rounded-2xl border border-slate-200/80">
-            <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between shadow-xs mb-2 shrink-0">
-              <div className="flex items-center space-x-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                <span className="text-xs font-black text-slate-900 uppercase tracking-wider">3. Video Approved</span>
-              </div>
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                {column3Items.length}
-              </span>
-            </div>
-
-            <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-320px)] min-h-[460px] pr-1">
-              {column3Items.length > 0 ? (
-                column3Items.map(item => (
-                  <div 
-                    key={item.id} 
-                    onClick={() => setSelectedCreator(item)}
-                    className="p-3 rounded-2xl glass-panel-light glass-panel-light-hover cursor-pointer"
-                  >
-                    {/* Brand & Campaign Pill */}
-                    {(item.org_name || item.campaign_name) && (
-                      <div className="flex items-center space-x-1 text-[9px] font-semibold mb-1 truncate">
-                        <span className="px-1.5 py-0.2 rounded bg-blue-50 text-[#0052FF] border border-blue-200/60 font-bold truncate max-w-[85px]">
-                          {item.org_name || "Brand"}
-                        </span>
-                        {item.campaign_name && (
-                          <span className="text-slate-400 truncate max-w-[95px]" title={item.campaign_name}>
-                            • {item.campaign_name}
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="font-extrabold text-xs text-slate-900 truncate" title={item.creator_name}>{item.creator_name}</span>
-                      <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-700 font-bold shrink-0">Approved</span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 font-medium mt-0.5 truncate">{item.deliverables}</div>
-                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px]">
-                      <span className="text-[11px] text-emerald-700 font-bold truncate">Ready For Live</span>
-                      <span className="text-[9px] text-slate-400 shrink-0">{formatDateOnly(item.video_approval_date)}</span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="p-6 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 text-center text-xs text-slate-400 font-medium">
-                  No creators matching filters
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Column 4: Live Content & Analytics */}
-          <div className="flex flex-col bg-slate-100/70 p-2 sm:p-2.5 rounded-2xl border border-slate-200/80">
-            <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between shadow-xs mb-2 shrink-0">
-              <div className="flex items-center space-x-2">
-                <span className="live-indicator-dot"></span>
-                <span className="text-xs font-black text-slate-900 uppercase tracking-wider">4. Live &amp; Analytics</span>
-              </div>
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#0052FF]">
-                {column4Items.length}
-              </span>
-            </div>
-
-            <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-320px)] min-h-[460px] pr-1">
-              {column4Items.length > 0 ? (
-                column4Items.map(item => (
-                  <div 
-                    key={item.id} 
-                    onClick={() => setSelectedCreator(item)}
-                    className="p-3 rounded-2xl glass-panel-light glass-panel-light-hover cursor-pointer border-blue-200 bg-blue-50/20"
-                  >
-                    {/* Brand & Campaign Pill */}
-                    {(item.org_name || item.campaign_name) && (
-                      <div className="flex items-center space-x-1 text-[9px] font-semibold mb-1 truncate">
-                        <span className="px-1.5 py-0.2 rounded bg-blue-50 text-[#0052FF] border border-blue-200/60 font-bold truncate max-w-[85px]">
-                          {item.org_name || "Brand"}
-                        </span>
-                        {item.campaign_name && (
-                          <span className="text-slate-400 truncate max-w-[95px]" title={item.campaign_name}>
-                            • {item.campaign_name}
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="font-extrabold text-xs text-slate-900 truncate" title={item.creator_name}>{item.creator_name}</span>
-                      <span className="text-[9px] px-2 py-0.2 rounded-full bg-blue-100 text-[#0052FF] font-black flex items-center space-x-1 shrink-0">
-                        <span className="live-indicator-dot"></span>
-                        <span>LIVE</span>
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-600 mt-1 flex items-center justify-between font-semibold">
-                      <span className="truncate">{item.total_views > 0 ? `${(item.total_views / 1000).toFixed(0)}K Views` : "Collecting stats"}</span>
-                      <span className="text-emerald-700 font-extrabold shrink-0">{item.engagement_rate}% ER</span>
-                    </div>
-                    <div className="mt-2.5 pt-2 border-t border-blue-100 flex items-center justify-between gap-1 text-[11px]">
-                      <a 
-                        href={item.live_link}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        className="text-[11px] text-[#0052FF] font-bold hover:underline flex items-center space-x-1 shrink-0"
-                      >
-                        <Video className="w-3 h-3" />
-                        <span>Watch Reel</span>
-                        <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
-                      <div className="flex items-center space-x-1.5 shrink-0">
-                        <span className="text-[9px] text-slate-400">Live: {formatDateOnly(item.live_date)}</span>
-                        {(() => {
-                          const creatorProofs = getCreatorProofScreenshots(item);
-                          if (creatorProofs.length === 0) return null;
-                          return (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setLightboxScreenshot({
-                                  urls: creatorProofs.map(p => p.url),
-                                  currentIndex: 0,
-                                  title: `${item.creator_name} - Verified Proofs`,
-                                  tag: `📷 ${creatorProofs.length} Proof${creatorProofs.length > 1 ? "s" : ""}`
-                                });
-                              }}
-                              className="inline-flex items-center space-x-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-50 hover:bg-blue-100 text-[#0052FF] border border-blue-200 cursor-pointer shadow-2xs transition-colors"
-                              title="Click to view verified screenshot proofs"
-                            >
-                              <Camera className="w-2.5 h-2.5" />
-                              <span>{creatorProofs.length}</span>
-                            </button>
-                          );
-                        })()}
-                      </div>
-                    </div>
-
-                    {/* Milestone Tracking Badge on Kanban Card */}
-                    {(() => {
-                      const ms = calculateCreatorMilestones(item);
-                      if (ms.allMilestonesCompleted) {
-                        return (
-                          <div className="mt-1.5 flex items-center justify-between px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-800 text-[10px] font-bold border border-emerald-200">
-                            <span>🏆 All Done</span>
-                            <span className="text-[9px] font-mono font-medium">Day {ms.daysSinceLive}</span>
-                          </div>
-                        );
-                      }
-                      if (ms.hasActionRequired && ms.nextActionMilestone) {
-                        return (
-                          <div className={`mt-1.5 flex items-center justify-between px-2 py-0.5 rounded-lg text-[10px] font-bold border ${
-                            ms.nextActionMilestone.isOverdue
-                              ? "bg-rose-50 text-rose-700 border-rose-300 animate-pulse"
-                              : "bg-amber-50 text-amber-900 border-amber-300"
-                          }`}>
-                            <span className="flex items-center space-x-1">
-                              <Zap className="w-3 h-3" />
-                              <span>{ms.nextActionMilestone.shortLabel} {ms.nextActionMilestone.isOverdue ? `(${Math.abs(ms.nextActionMilestone.daysRemaining)}d ago)` : "Due Today"}</span>
-                            </span>
-                            <span className="text-[9px] font-medium font-mono">{ms.nextActionMilestone.formattedTargetDate}</span>
-                          </div>
-                        );
-                      }
-                      if (ms.nextActionMilestone) {
-                        return (
-                          <div className="mt-1.5 flex items-center justify-between px-2 py-0.5 rounded-lg bg-slate-50 text-slate-600 text-[10px] font-semibold border border-slate-200">
-                            <span>{ms.nextActionMilestone.shortLabel} in {ms.nextActionMilestone.daysRemaining}d</span>
-                            <span className="text-[9px] font-medium font-mono">{ms.nextActionMilestone.formattedTargetDate}</span>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </div>
-                ))
-              ) : (
-                <div className="p-6 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 text-center text-xs text-slate-400 font-medium">
-                  No creators matching filters
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Column 5: Dropped / Withdrawn Creators (Displayed conditionally) */}
-          {column5Items.length > 0 && (
-            <div className="flex flex-col bg-slate-100/70 p-2 sm:p-2.5 rounded-2xl border border-rose-200/80">
-              <div className="p-3 rounded-xl bg-white border border-rose-200 flex items-center justify-between shadow-xs mb-2 shrink-0">
+          <div className={`flex md:grid overflow-x-auto md:overflow-visible snap-x snap-mandatory gap-3 sm:gap-3.5 pb-3 md:pb-0 no-scrollbar md:grid-cols-2 lg:grid-cols-3 ${column5Items.length > 0 ? "xl:grid-cols-5" : "xl:grid-cols-4"} items-start`}>
+            
+            {/* Column 1: Onboarding & Scripting */}
+            <div id="kanban-column-1" className="flex flex-col bg-slate-100/70 p-2 sm:p-2.5 rounded-2xl border border-slate-200/80 w-[86vw] max-w-[340px] shrink-0 snap-center md:w-auto md:max-w-none">
+              <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between shadow-xs mb-2 shrink-0">
                 <div className="flex items-center space-x-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
-                  <span className="text-xs font-black text-rose-900 uppercase tracking-wider">5. Dropped</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                  <span className="text-xs font-black text-slate-900 uppercase tracking-wider">1. Scripting Stage</span>
                 </div>
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-100">
-                  {column5Items.length}
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-mono">
+                  {column1Items.length}
                 </span>
               </div>
 
-              <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-320px)] min-h-[460px] pr-1">
-                {column5Items.map(item => {
-                  const dropStageText = 
-                    item.confirmation_mail_status === "Drop" ? "Dropped at Confirmation" :
-                    item.script_status === "Drop" ? "Dropped at Script" :
-                    item.first_draft_status === "Drop" ? "Dropped at 1st Draft" :
-                    item.final_video_status === "Drop" ? "Dropped at Final Video" :
-                    "Dropped Mid-Pipeline";
-
-                  return (
+              <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-320px)] min-h-[140px] md:min-h-[460px] pr-1">
+                {column1Items.length > 0 ? (
+                  column1Items.map(item => (
                     <div 
                       key={item.id} 
                       onClick={() => setSelectedCreator(item)}
-                      className="p-3 rounded-2xl glass-panel-light glass-panel-light-hover cursor-pointer border-rose-200/90 bg-rose-50/20"
+                      className="p-3 rounded-2xl glass-panel-light glass-panel-light-hover cursor-pointer"
                     >
                       {/* Brand & Campaign Pill */}
                       {(item.org_name || item.campaign_name) && (
                         <div className="flex items-center space-x-1 text-[9px] font-semibold mb-1 truncate">
-                          <span className="px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200/60 font-bold truncate max-w-[85px]">
+                          <span className="px-1.5 py-0.2 rounded bg-blue-50 text-[#0052FF] border border-blue-200/60 font-bold truncate max-w-[85px]">
                             {item.org_name || "Brand"}
                           </span>
                           {item.campaign_name && (
-                            <span className="text-slate-500 truncate max-w-[95px]" title={item.campaign_name}>
+                            <span className="text-slate-400 truncate max-w-[95px]" title={item.campaign_name}>
                               • {item.campaign_name}
                             </span>
                           )}
@@ -2322,26 +2074,359 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                       )}
 
                       <div className="flex items-center justify-between gap-1">
-                        <span className="font-extrabold text-xs text-slate-800 line-through decoration-rose-400 truncate pr-1">{item.creator_name}</span>
-                        <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-700 font-bold shrink-0">
-                          Dropped
-                        </span>
+                        <span className="font-extrabold text-xs text-slate-900 truncate" title={item.creator_name}>{item.creator_name}</span>
+                        {item.category && item.category !== "Unspecified" && item.followers_count > 0 && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-blue-50 text-[#0052FF] font-black shrink-0">{item.category}</span>
+                        )}
                       </div>
                       <div className="text-[11px] text-slate-500 font-medium mt-0.5 truncate">
                         {item.niche || "General"} {item.followers_count > 0 ? `• ${formatFollowers(item.followers_count)}` : ""}
                       </div>
-                      <div className="mt-2.5 pt-2 border-t border-rose-100/80 flex items-center justify-between text-[11px]">
-                        <span className="text-[10px] font-semibold text-rose-700 flex items-center space-x-1 truncate">
-                          <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
-                          <span className="truncate">{dropStageText}</span>
-                        </span>
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                        {getScriptStatusBadge(item.script_status)}
+                        {(() => {
+                          const info = getScriptLinkInfo(item.script_link);
+                          if (!info) return null;
+                          return (
+                            <a 
+                              href={info.href}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              className="text-[11px] text-[#0052FF] font-semibold hover:underline flex items-center space-x-1 shrink-0"
+                            >
+                              <FileText className="w-3 h-3" />
+                              <span>{info.label.replace(" ↗", "")}</span>
+                            </a>
+                          );
+                        })()}
                       </div>
                     </div>
-                  );
-                })}
+                  ))
+                ) : (
+                  <div className="p-6 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 text-center text-xs text-slate-400 font-medium">
+                    No creators matching filters
+                  </div>
+                )}
               </div>
             </div>
-          )}
+
+            {/* Column 2: Video 1st Draft & Revisions */}
+            <div id="kanban-column-2" className="flex flex-col bg-slate-100/70 p-2 sm:p-2.5 rounded-2xl border border-slate-200/80 w-[86vw] max-w-[340px] shrink-0 snap-center md:w-auto md:max-w-none">
+              <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between shadow-xs mb-2 shrink-0">
+                <div className="flex items-center space-x-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+                  <span className="text-xs font-black text-slate-900 uppercase tracking-wider">2. Draft &amp; Reshoot</span>
+                </div>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-mono">
+                  {column2Items.length}
+                </span>
+              </div>
+
+              <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-320px)] min-h-[140px] md:min-h-[460px] pr-1">
+                {column2Items.length > 0 ? (
+                  column2Items.map(item => (
+                    <div 
+                      key={item.id} 
+                      onClick={() => setSelectedCreator(item)}
+                      className="p-3 rounded-2xl glass-panel-light glass-panel-light-hover cursor-pointer"
+                    >
+                      {/* Brand & Campaign Pill */}
+                      {(item.org_name || item.campaign_name) && (
+                        <div className="flex items-center space-x-1 text-[9px] font-semibold mb-1 truncate">
+                          <span className="px-1.5 py-0.2 rounded bg-blue-50 text-[#0052FF] border border-blue-200/60 font-bold truncate max-w-[85px]">
+                            {item.org_name || "Brand"}
+                          </span>
+                          {item.campaign_name && (
+                            <span className="text-slate-400 truncate max-w-[95px]" title={item.campaign_name}>
+                              • {item.campaign_name}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-extrabold text-xs text-slate-900 truncate" title={item.creator_name}>{item.creator_name}</span>
+                        {item.category && item.category !== "Unspecified" && item.followers_count > 0 && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-blue-50 text-[#0052FF] font-black shrink-0">{item.category}</span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-medium mt-0.5 truncate">
+                        {item.niche || "General"} {item.followers_count > 0 ? `• ${formatFollowers(item.followers_count)}` : ""}
+                      </div>
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                        {getDraftStatusBadge(item.first_draft_status)}
+                        {item.revision_drive_link && (
+                          <a 
+                            href={item.revision_drive_link}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="text-[11px] text-purple-600 font-semibold hover:underline flex items-center space-x-1 shrink-0"
+                          >
+                            <FolderOpen className="w-3 h-3" />
+                            <span>Revisions</span>
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-6 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 text-center text-xs text-slate-400 font-medium">
+                    No creators matching filters
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Column 3: Final Video Approved */}
+            <div id="kanban-column-3" className="flex flex-col bg-slate-100/70 p-2 sm:p-2.5 rounded-2xl border border-slate-200/80 w-[86vw] max-w-[340px] shrink-0 snap-center md:w-auto md:max-w-none">
+              <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between shadow-xs mb-2 shrink-0">
+                <div className="flex items-center space-x-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                  <span className="text-xs font-black text-slate-900 uppercase tracking-wider">3. Video Approved</span>
+                </div>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-mono">
+                  {column3Items.length}
+                </span>
+              </div>
+
+              <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-320px)] min-h-[140px] md:min-h-[460px] pr-1">
+                {column3Items.length > 0 ? (
+                  column3Items.map(item => (
+                    <div 
+                      key={item.id} 
+                      onClick={() => setSelectedCreator(item)}
+                      className="p-3 rounded-2xl glass-panel-light glass-panel-light-hover cursor-pointer"
+                    >
+                      {/* Brand & Campaign Pill */}
+                      {(item.org_name || item.campaign_name) && (
+                        <div className="flex items-center space-x-1 text-[9px] font-semibold mb-1 truncate">
+                          <span className="px-1.5 py-0.2 rounded bg-blue-50 text-[#0052FF] border border-blue-200/60 font-bold truncate max-w-[85px]">
+                            {item.org_name || "Brand"}
+                          </span>
+                          {item.campaign_name && (
+                            <span className="text-slate-400 truncate max-w-[95px]" title={item.campaign_name}>
+                              • {item.campaign_name}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-extrabold text-xs text-slate-900 truncate" title={item.creator_name}>{item.creator_name}</span>
+                        <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-700 font-bold shrink-0">Approved</span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-medium mt-0.5 truncate">{item.deliverables}</div>
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px]">
+                        <span className="text-[11px] text-emerald-700 font-bold truncate">Ready For Live</span>
+                        <span className="text-[9px] text-slate-400 shrink-0">{formatDateOnly(item.video_approval_date)}</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-6 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 text-center text-xs text-slate-400 font-medium">
+                    No creators matching filters
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Column 4: Live Content & Analytics */}
+            <div id="kanban-column-4" className="flex flex-col bg-slate-100/70 p-2 sm:p-2.5 rounded-2xl border border-slate-200/80 w-[86vw] max-w-[340px] shrink-0 snap-center md:w-auto md:max-w-none">
+              <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between shadow-xs mb-2 shrink-0">
+                <div className="flex items-center space-x-2">
+                  <span className="live-indicator-dot"></span>
+                  <span className="text-xs font-black text-slate-900 uppercase tracking-wider">4. Live &amp; Analytics</span>
+                </div>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#0052FF] font-mono">
+                  {column4Items.length}
+                </span>
+              </div>
+
+              <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-320px)] min-h-[140px] md:min-h-[460px] pr-1">
+                {column4Items.length > 0 ? (
+                  column4Items.map(item => (
+                    <div 
+                      key={item.id} 
+                      onClick={() => setSelectedCreator(item)}
+                      className="p-3 rounded-2xl glass-panel-light glass-panel-light-hover cursor-pointer border-blue-200 bg-blue-50/20"
+                    >
+                      {/* Brand & Campaign Pill */}
+                      {(item.org_name || item.campaign_name) && (
+                        <div className="flex items-center space-x-1 text-[9px] font-semibold mb-1 truncate">
+                          <span className="px-1.5 py-0.2 rounded bg-blue-50 text-[#0052FF] border border-blue-200/60 font-bold truncate max-w-[85px]">
+                            {item.org_name || "Brand"}
+                          </span>
+                          {item.campaign_name && (
+                            <span className="text-slate-400 truncate max-w-[95px]" title={item.campaign_name}>
+                              • {item.campaign_name}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-extrabold text-xs text-slate-900 truncate" title={item.creator_name}>{item.creator_name}</span>
+                        <span className="text-[9px] px-2 py-0.2 rounded-full bg-blue-100 text-[#0052FF] font-black flex items-center space-x-1 shrink-0">
+                          <span className="live-indicator-dot"></span>
+                          <span>LIVE</span>
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-600 mt-1 flex items-center justify-between font-semibold">
+                        <span className="truncate">{item.total_views > 0 ? `${(item.total_views / 1000).toFixed(0)}K Views` : "Collecting stats"}</span>
+                        <span className="text-emerald-700 font-extrabold shrink-0">{item.engagement_rate}% ER</span>
+                      </div>
+                      <div className="mt-2.5 pt-2 border-t border-blue-100 flex items-center justify-between gap-1 text-[11px]">
+                        <a 
+                          href={item.live_link}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="text-[11px] text-[#0052FF] font-bold hover:underline flex items-center space-x-1 shrink-0"
+                        >
+                          <Video className="w-3 h-3" />
+                          <span>Watch Reel</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                        <div className="flex items-center space-x-1.5 shrink-0">
+                          <span className="text-[9px] text-slate-400">Live: {formatDateOnly(item.live_date)}</span>
+                          {(() => {
+                            const creatorProofs = getCreatorProofScreenshots(item);
+                            if (creatorProofs.length === 0) return null;
+                            return (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setLightboxScreenshot({
+                                    urls: creatorProofs.map(p => p.url),
+                                    currentIndex: 0,
+                                    title: `${item.creator_name} - Verified Proofs`,
+                                    tag: `📷 ${creatorProofs.length} Proof${creatorProofs.length > 1 ? "s" : ""}`
+                                  });
+                                }}
+                                className="inline-flex items-center space-x-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-50 hover:bg-blue-100 text-[#0052FF] border border-blue-200 cursor-pointer shadow-2xs transition-colors"
+                                title="Click to view verified screenshot proofs"
+                              >
+                                <Camera className="w-2.5 h-2.5" />
+                                <span>{creatorProofs.length}</span>
+                              </button>
+                            );
+                          })()}
+                        </div>
+                      </div>
+
+                      {/* Milestone Tracking Badge on Kanban Card */}
+                      {(() => {
+                        const ms = calculateCreatorMilestones(item);
+                        if (ms.allMilestonesCompleted) {
+                          return (
+                            <div className="mt-1.5 flex items-center justify-between px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-800 text-[10px] font-bold border border-emerald-200">
+                              <span>🏆 All Done</span>
+                              <span className="text-[9px] font-mono font-medium">Day {ms.daysSinceLive}</span>
+                            </div>
+                          );
+                        }
+                        if (ms.hasActionRequired && ms.nextActionMilestone) {
+                          return (
+                            <div className={`mt-1.5 flex items-center justify-between px-2 py-0.5 rounded-lg text-[10px] font-bold border ${
+                              ms.nextActionMilestone.isOverdue
+                                ? "bg-rose-50 text-rose-700 border-rose-300"
+                                : "bg-amber-50 text-amber-900 border-amber-300"
+                            }`}>
+                              <span className="flex items-center space-x-1 truncate pr-1">
+                                <Zap className="w-3 h-3 shrink-0" />
+                                <span className="truncate">{ms.nextActionMilestone.shortLabel} {ms.nextActionMilestone.isOverdue ? `(${Math.abs(ms.nextActionMilestone.daysRemaining)}d ago)` : "Due Today"}</span>
+                              </span>
+                              <span className="text-[9px] font-medium font-mono shrink-0">{ms.nextActionMilestone.formattedTargetDate}</span>
+                            </div>
+                          );
+                        }
+                        if (ms.nextActionMilestone) {
+                          return (
+                            <div className="mt-1.5 flex items-center justify-between px-2 py-0.5 rounded-lg bg-slate-50 text-slate-600 text-[10px] font-semibold border border-slate-200">
+                              <span className="truncate pr-1">{ms.nextActionMilestone.shortLabel} in {ms.nextActionMilestone.daysRemaining}d</span>
+                              <span className="text-[9px] font-medium font-mono shrink-0">{ms.nextActionMilestone.formattedTargetDate}</span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-6 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 text-center text-xs text-slate-400 font-medium">
+                    No creators matching filters
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Column 5: Dropped / Withdrawn Creators (Displayed conditionally) */}
+            {column5Items.length > 0 && (
+              <div id="kanban-column-5" className="flex flex-col bg-slate-100/70 p-2 sm:p-2.5 rounded-2xl border border-rose-200/80 w-[86vw] max-w-[340px] shrink-0 snap-center md:w-auto md:max-w-none">
+                <div className="p-3 rounded-xl bg-white border border-rose-200 flex items-center justify-between shadow-xs mb-2 shrink-0">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                    <span className="text-xs font-black text-rose-900 uppercase tracking-wider">5. Dropped</span>
+                  </div>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-100 font-mono">
+                    {column5Items.length}
+                  </span>
+                </div>
+
+                <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-320px)] min-h-[140px] md:min-h-[460px] pr-1">
+                  {column5Items.map(item => {
+                    const dropStageText = 
+                      item.confirmation_mail_status === "Drop" ? "Dropped at Confirmation" :
+                      item.script_status === "Drop" ? "Dropped at Script" :
+                      item.first_draft_status === "Drop" ? "Dropped at 1st Draft" :
+                      item.final_video_status === "Drop" ? "Dropped at Final Video" :
+                      "Dropped Mid-Pipeline";
+
+                    return (
+                      <div 
+                        key={item.id} 
+                        onClick={() => setSelectedCreator(item)}
+                        className="p-3 rounded-2xl glass-panel-light glass-panel-light-hover cursor-pointer border-rose-200/90 bg-rose-50/20"
+                      >
+                        {/* Brand & Campaign Pill */}
+                        {(item.org_name || item.campaign_name) && (
+                          <div className="flex items-center space-x-1 text-[9px] font-semibold mb-1 truncate">
+                            <span className="px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200/60 font-bold truncate max-w-[85px]">
+                              {item.org_name || "Brand"}
+                            </span>
+                            {item.campaign_name && (
+                              <span className="text-slate-500 truncate max-w-[95px]" title={item.campaign_name}>
+                                • {item.campaign_name}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="font-extrabold text-xs text-slate-800 line-through decoration-rose-400 truncate pr-1">{item.creator_name}</span>
+                          <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-700 font-bold shrink-0">
+                            Dropped
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-medium mt-0.5 truncate">
+                          {item.niche || "General"} {item.followers_count > 0 ? `• ${formatFollowers(item.followers_count)}` : ""}
+                        </div>
+                        <div className="mt-2.5 pt-2 border-t border-rose-100/80 flex items-center justify-between text-[11px]">
+                          <span className="text-[10px] font-semibold text-rose-700 flex items-center space-x-1 truncate">
+                            <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
+                            <span className="truncate">{dropStageText}</span>
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
