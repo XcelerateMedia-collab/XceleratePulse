@@ -282,6 +282,29 @@ function resolveHyperlink(val, richText, formula) {
 }
 
 /**
+ * Intelligently extracts clean social handle or path from any raw URL, handle, or query string
+ * e.g., "https://www.instagram.com/taxsnap_11/reels/" -> "taxsnap_11"
+ *       "tpovgirl ?utm_source=ig_web_button_share"    -> "tpovgirl"
+ *       "arttfinance?utm_source=ig_web_button_sha"    -> "arttfinance"
+ */
+function extractCleanHandleOrUrl(rawUrl) {
+  if (!rawUrl) return "";
+  var s = String(rawUrl).trim().toLowerCase();
+  if (s.indexOf("http") !== -1) {
+    var m = s.match(/(?:https?:\/\/)?(?:www\.)?(?:instagram\.com\/|youtube\.com\/@?|tiktok\.com\/@?)([a-z0-9._]+)/i);
+    if (m && m[1]) return m[1].replace(/[^a-z0-9._]/g, "");
+  }
+  var qIdx = s.indexOf("?");
+  if (qIdx !== -1) s = s.substring(0, qIdx);
+  s = s.trim().replace(/^[@/]+/, "").replace(/\/+$/, "");
+  if (s.indexOf("/") !== -1) {
+    var parts = s.split("/");
+    s = parts[parts.length - 1] || "";
+  }
+  return s.replace(/[^a-z0-9._]/g, "");
+}
+
+/**
  * Safely writes a 2D array of rows to a sheet range.
  * If Google Sheets throws a Data Validation error (e.g. strict dropdown rule on cell),
  * it clears validation on the target range and performs the batch write in under 100ms.
@@ -629,6 +652,14 @@ function normalizeFlowValue(flowKey, rawVal, followersCount) {
     if (lower === "other") return "Other";
   }
 
+  // 9. Profile URL / Instagram Link: auto-format handles without protocol to full clickable URL
+  if (flowKey.indexOf("profileurl") !== -1 || flowKey === "url") {
+    if (s && !/^https?:\/\//i.test(s)) {
+      var h = extractCleanHandleOrUrl(s);
+      if (h) return "https://www.instagram.com/" + h;
+    }
+  }
+
   return rawVal;
 }
 
@@ -742,22 +773,63 @@ function pullEmployeeListIntoFlow(employeeList, scopeLabel) {
     if (hName) flowColMap[hName] = c + 1;
   }
 
-  // Build index of existing rows in Flow: mapped by Deliverable ID, or CampaignID_CreatorName
-  var existingFlowRows = {};
+  // Build rich multi-key candidate queues of existing rows in Flow to guarantee ZERO duplicate overwrites
   var idCol = flowColMap["deliverableid"] || flowColMap["id"] || 1;
   var campCol = flowColMap["campaignid"];
   var creatorCol = flowColMap["creatorname"];
+  var urlCol = flowColMap["url"] || flowColMap["profileurl"] || flowColMap["creatorurl"];
+  var briefCol = flowColMap["campaignname"] || flowColMap["campaign"] || flowColMap["briefname"] || flowColMap["brief"];
+  var pocCol = flowColMap["xceleratepoc"] || flowColMap["poc"];
 
   var flowData = [];
+  var usedFlowRowIndices = {};
+
+  var flowById = {};          // id -> [r]
+  var flowByFullKey = {};     // empPoc + "_" + cId + "_" + crName + "_" + cleanUrl -> [r, ...]
+  var flowByCampCrUrl = {};   // cId + "_" + crName + "_" + cleanUrl -> [r, ...]
+  var flowByCampCrBrief = {}; // cId + "_" + crName + "_" + cleanBrief -> [r, ...]
+  var flowByPocCampCr = {};   // empPoc + "_" + cId + "_" + crName -> [r, ...]
+  var flowByCampCr = {};      // cId + "_" + crName -> [r, ...]
+
   if (flowLastRow >= 2) {
     flowData = flowSheet.getRange(2, 1, flowLastRow - 1, flowLastCol).getValues();
     for (var r = 0; r < flowData.length; r++) {
-      var dId = String(flowData[r][idCol - 1] || "").trim();
-      var cId = campCol ? String(flowData[r][campCol - 1] || "").trim() : "";
-      var crName = creatorCol ? String(flowData[r][creatorCol - 1] || "").trim().toLowerCase() : "";
+      var dId = idCol ? String(flowData[r][idCol - 1] || "").trim() : "";
+      var cId = campCol ? String(flowData[r][campCol - 1] || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+      var crName = creatorCol ? String(flowData[r][creatorCol - 1] || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+      var fUrl = urlCol ? extractCleanHandleOrUrl(flowData[r][urlCol - 1]) : "";
+      var fBrief = briefCol ? String(flowData[r][briefCol - 1] || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 30) : "";
+      var fPoc = pocCol ? String(flowData[r][pocCol - 1] || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "") : "";
 
-      if (dId) existingFlowRows[dId] = r; // 0-indexed in flowData array
-      if (cId && crName) existingFlowRows[cId + "_" + crName] = r;
+      if (dId) {
+        if (!flowById[dId]) flowById[dId] = [];
+        flowById[dId].push(r);
+      }
+      if (cId && crName) {
+        if (fUrl) {
+          if (fPoc) {
+            var k1 = fPoc + "_" + cId + "_" + crName + "_" + fUrl;
+            if (!flowByFullKey[k1]) flowByFullKey[k1] = [];
+            flowByFullKey[k1].push(r);
+          }
+          var k2 = cId + "_" + crName + "_" + fUrl;
+          if (!flowByCampCrUrl[k2]) flowByCampCrUrl[k2] = [];
+          flowByCampCrUrl[k2].push(r);
+        }
+        if (fBrief) {
+          var k3 = cId + "_" + crName + "_" + fBrief;
+          if (!flowByCampCrBrief[k3]) flowByCampCrBrief[k3] = [];
+          flowByCampCrBrief[k3].push(r);
+        }
+        if (fPoc) {
+          var k4 = fPoc + "_" + cId + "_" + crName;
+          if (!flowByPocCampCr[k4]) flowByPocCampCr[k4] = [];
+          flowByPocCampCr[k4].push(r);
+        }
+        var k5 = cId + "_" + crName;
+        if (!flowByCampCr[k5]) flowByCampCr[k5] = [];
+        flowByCampCr[k5].push(r);
+      }
     }
   }
 
@@ -843,14 +915,14 @@ function pullEmployeeListIntoFlow(employeeList, scopeLabel) {
           ? String(rowVals[empColMap["deliverableid"]] || "").trim() 
           : (empColMap["uniqueid"] !== undefined ? String(rowVals[empColMap["uniqueid"]] || "").trim() : (empColMap["id"] !== undefined ? String(rowVals[empColMap["id"]] || "").trim() : ""));
 
+        var empUrlIdx = empColMap["url"] !== undefined ? empColMap["url"] : (empColMap["profileurl"] !== undefined ? empColMap["profileurl"] : undefined);
+        var rawEmpUrl = (empUrlIdx !== undefined) ? String(rowVals[empUrlIdx] || "").trim() : "";
+        var cleanEmpUrl = extractCleanHandleOrUrl(rawEmpUrl);
+
         if (!rowCreator) {
-          var empUrlIdx = empColMap["url"] !== undefined ? empColMap["url"] : (empColMap["profileurl"] !== undefined ? empColMap["profileurl"] : undefined);
-          if (empUrlIdx !== undefined) {
-            var rawUrl = String(rowVals[empUrlIdx] || "");
-            var m = rawUrl.match(/(?:instagram\.com\/|youtube\.com\/@?|tiktok\.com\/@?)([a-zA-Z0-9._]+)/);
-            if (m && m[1]) rowCreator = m[1].replace(/[^a-zA-Z0-9._]/g, "");
-          }
-          if (!rowCreator && rowUniqueId) {
+          if (cleanEmpUrl) {
+            rowCreator = cleanEmpUrl;
+          } else if (rowUniqueId) {
             rowCreator = "Creator (" + rowUniqueId.slice(0, 8) + ")";
           }
         }
@@ -874,21 +946,73 @@ function pullEmployeeListIntoFlow(employeeList, scopeLabel) {
           }
         }
 
-        if (!rowCampId && !rowCreator && !rowBrief) continue; // skip blank rows
+        // Skip completely empty rows
+        if (!rowCampId && !rowCreator && !rowBrief && !cleanEmpUrl) continue;
 
-        // Determine Deliverable ID for Flow
-        var deliverableId = rowUniqueId;
-        if (!deliverableId || deliverableId === "#ERROR!") {
-          var cleanC = rowCreator.toLowerCase().replace(/[^a-z0-9]/g, "") || "creator";
-          deliverableId = rowCampId ? (rowCampId + "-D" + Math.random().toString(36).substring(2, 6).toUpperCase()) : Utilities.getUuid();
+        if (!rowCreator) {
+          rowCreator = "Creator (Row " + (er + 1) + ")";
         }
 
-        // Check if row already exists in Flow
+        var rowOwner = empColMap["executionowner"] !== undefined ? String(rowVals[empColMap["executionowner"]] || "").trim() : "";
+        var cleanCamp = rowCampId.toLowerCase().replace(/[^a-z0-9]/g, "");
+        var cleanCr = rowCreator.toLowerCase().replace(/[^a-z0-9]/g, "");
+        var cleanBrief = rowBrief.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 30);
+        var cleanEmp = (rowOwner || emp.employee).toLowerCase().replace(/[^a-z0-9]/g, "");
+
         var existingRowIdx = undefined;
-        if (deliverableId && existingFlowRows[deliverableId] !== undefined) {
-          existingRowIdx = existingFlowRows[deliverableId];
-        } else if (rowCampId && rowCreator && existingFlowRows[rowCampId + "_" + rowCreator.toLowerCase()] !== undefined) {
-          existingRowIdx = existingFlowRows[rowCampId + "_" + rowCreator.toLowerCase()];
+
+        function pickAvailableRow(arr) {
+          if (!arr || arr.length === 0) return undefined;
+          for (var a = 0; a < arr.length; a++) {
+            var cand = arr[a];
+            if (!usedFlowRowIndices[cand]) return cand;
+          }
+          return undefined;
+        }
+
+        // Priority 1: Match by explicit Deliverable ID / Unique ID
+        if (rowUniqueId && flowById[rowUniqueId]) {
+          existingRowIdx = pickAvailableRow(flowById[rowUniqueId]);
+        }
+
+        // Priority 2: Match by Employee + Campaign + Creator + Clean URL
+        if (existingRowIdx === undefined && cleanEmp && cleanCamp && cleanCr && cleanEmpUrl) {
+          existingRowIdx = pickAvailableRow(flowByFullKey[cleanEmp + "_" + cleanCamp + "_" + cleanCr + "_" + cleanEmpUrl]);
+        }
+
+        // Priority 3: Match by Campaign + Creator + Clean URL
+        if (existingRowIdx === undefined && cleanCamp && cleanCr && cleanEmpUrl) {
+          existingRowIdx = pickAvailableRow(flowByCampCrUrl[cleanCamp + "_" + cleanCr + "_" + cleanEmpUrl]);
+        }
+
+        // Priority 4: Match by Campaign + Creator + Brief
+        if (existingRowIdx === undefined && cleanCamp && cleanCr && cleanBrief) {
+          existingRowIdx = pickAvailableRow(flowByCampCrBrief[cleanCamp + "_" + cleanCr + "_" + cleanBrief]);
+        }
+
+        // Priority 5: Match by Employee + Campaign + Creator
+        if (existingRowIdx === undefined && cleanEmp && cleanCamp && cleanCr) {
+          existingRowIdx = pickAvailableRow(flowByPocCampCr[cleanEmp + "_" + cleanCamp + "_" + cleanCr]);
+        }
+
+        // Priority 6: Match by Campaign + Creator (first unused occurrence)
+        if (existingRowIdx === undefined && cleanCamp && cleanCr) {
+          existingRowIdx = pickAvailableRow(flowByCampCr[cleanCamp + "_" + cleanCr]);
+        }
+
+        // Mark consumed immediately so NO OTHER ROW can match this Flow row!
+        if (existingRowIdx !== undefined) {
+          usedFlowRowIndices[existingRowIdx] = true;
+        }
+
+        // Preserve existing Deliverable ID in Flow, or generate unique UUID
+        var deliverableId = "";
+        if (existingRowIdx !== undefined && idCol && flowData[existingRowIdx][idCol - 1]) {
+          deliverableId = String(flowData[existingRowIdx][idCol - 1]).trim();
+        } else if (rowUniqueId && rowUniqueId !== "#ERROR!") {
+          deliverableId = rowUniqueId;
+        } else {
+          deliverableId = Utilities.getUuid();
         }
 
         // If existing row, preserve existing row values first so columns like Views, Likes, manual Brand/Agency Name aren't erased
@@ -988,11 +1112,10 @@ function pullEmployeeListIntoFlow(employeeList, scopeLabel) {
             updatedCreatorsList.push(rowCreator);
           }
         } else {
-          // Instant in-memory append! (Zero network roundtrip)
+          // Instant in-memory append of new creator deliverable! (Zero network roundtrip)
           var newIdx = flowData.length;
           flowData.push(targetRowArray);
-          if (deliverableId) existingFlowRows[deliverableId] = newIdx;
-          if (rowCampId && rowCreator) existingFlowRows[rowCampId + "_" + rowCreator.toLowerCase()] = newIdx;
+          usedFlowRowIndices[newIdx] = true; // Mark newly added row as consumed
           totalAppended++;
           if (rowCreator && !newCreatorsMap[rowCreator.toLowerCase()]) {
             newCreatorsMap[rowCreator.toLowerCase()] = true;
@@ -1669,6 +1792,40 @@ function handleRemoteApiRequest(e) {
         success: true,
         registry: registry
       };
+    } else if (action === "inspect_employee" || action === "inspect_employee_sheet") {
+      var empName = String(body.employee || p.employee || "Tej").trim();
+      var empList = getEmployeeSheetsList();
+      var targetEmp = null;
+      for (var i = 0; i < empList.length; i++) {
+        if (empList[i].employee.toLowerCase() === empName.toLowerCase()) {
+          targetEmp = empList[i];
+          break;
+        }
+      }
+      if (!targetEmp) {
+        output = { success: false, error: "Employee '" + empName + "' not found in registry." };
+      } else {
+        try {
+          var empSS = SpreadsheetApp.openById(targetEmp.sheetId);
+          var empSheet = empSS.getSheetByName(targetEmp.tabName) || empSS.getSheets()[0];
+          var lastR = empSheet.getLastRow();
+          var lastC = empSheet.getLastColumn();
+          var vals = empSheet.getRange(1, 1, lastR, lastC).getValues();
+          var headers = vals[0];
+          var dataRows = vals.slice(1);
+          output = {
+            success: true,
+            employee: targetEmp.employee,
+            sheetId: targetEmp.sheetId,
+            tabName: empSheet.getName(),
+            lastRow: lastR,
+            totalDataRows: dataRows.length,
+            headers: headers
+          };
+        } catch (inspectErr) {
+          output = { success: false, error: inspectErr.toString() };
+        }
+      }
     } else if (action === "add_employee" || action === "save_employee") {
       var empName = String(body.employee || p.employee || "").trim();
       var rawId = String(body.sheetId || p.sheetId || body.sheet_id || p.sheet_id || "").trim();
