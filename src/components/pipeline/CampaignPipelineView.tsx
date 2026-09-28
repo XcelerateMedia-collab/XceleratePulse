@@ -40,7 +40,9 @@ import {
   Briefcase,
   Activity,
   Layers,
-  Zap
+  Zap,
+  UserCheck,
+  Users
 } from "lucide-react";
 import { 
   CreatorDeliverableBrandView, 
@@ -67,28 +69,87 @@ interface DropdownOption {
 interface CustomFilterDropdownProps {
   id: string;
   label: string;
-  value: string;
+  value?: string;
+  selectedValues?: string[];
   options: DropdownOption[];
-  onChange: (val: string) => void;
+  onChange?: (val: string) => void;
+  onMultiChange?: (vals: string[]) => void;
+  multiSelect?: boolean;
+  enableSearch?: boolean;
+  searchPlaceholder?: string;
   icon?: React.ReactNode;
 }
 
 /**
- * Professional, compact, scrollable dropdown filter with search/counts and clean active styling
+ * Professional, compact, scrollable dropdown filter with multi-select, search, and counts
  */
 const CustomFilterDropdown: React.FC<CustomFilterDropdownProps> = ({
   id,
   label,
   value,
+  selectedValues,
   options,
   onChange,
+  onMultiChange,
+  multiSelect = true,
+  enableSearch = true,
+  searchPlaceholder,
   icon,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchFilter, setSearchFilter] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const selectedOption = options.find((o) => o.value === value) || options[0];
-  const isCustomActive = value !== "ALL";
+  // Normalize selected values
+  const selectedList = useMemo(() => {
+    if (multiSelect) {
+      if (!selectedValues || selectedValues.length === 0 || selectedValues.includes("ALL")) {
+        return [];
+      }
+      return selectedValues;
+    }
+    return value && value !== "ALL" ? [value] : [];
+  }, [multiSelect, selectedValues, value]);
+
+  const isCustomActive = selectedList.length > 0;
+
+  // Selected option objects
+  const selectedOptions = useMemo(() => {
+    return options.filter((o) => selectedList.includes(o.value));
+  }, [options, selectedList]);
+
+  // Dynamic Trigger Label
+  const triggerLabel = useMemo(() => {
+    if (!isCustomActive) return label;
+    if (selectedList.length === 1) {
+      const match = options.find((o) => o.value === selectedList[0]);
+      return match ? match.label : selectedList[0];
+    }
+    const shortLabel = label.replace(/^All\s+/i, "");
+    return `${selectedList.length} ${shortLabel}`;
+  }, [isCustomActive, selectedList, options, label]);
+
+  // Total count of selected items
+  const totalSelectedCount = useMemo(() => {
+    if (!isCustomActive) return undefined;
+    return selectedOptions.reduce((acc, curr) => acc + (curr.count || 0), 0);
+  }, [isCustomActive, selectedOptions]);
+
+  // Filter options based on embedded search
+  const filteredOptions = useMemo(() => {
+    const q = searchFilter.toLowerCase().trim();
+    if (!q) return options;
+    return options.filter((opt) => 
+      opt.value === "ALL" || opt.label.toLowerCase().includes(q)
+    );
+  }, [options, searchFilter]);
+
+  // Reset search when opening/closing
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchFilter("");
+    }
+  }, [isOpen]);
 
   // Close when clicking outside
   useEffect(() => {
@@ -116,6 +177,46 @@ const CustomFilterDropdown: React.FC<CustomFilterDropdownProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen]);
 
+  const handleToggleOption = (optVal: string) => {
+    if (!multiSelect) {
+      onChange?.(optVal);
+      setIsOpen(false);
+      return;
+    }
+
+    if (optVal === "ALL") {
+      onMultiChange?.([]);
+      return;
+    }
+
+    let next: string[];
+    if (selectedList.includes(optVal)) {
+      next = selectedList.filter((v) => v !== optVal);
+    } else {
+      next = [...selectedList, optVal];
+    }
+
+    onMultiChange?.(next);
+  };
+
+  const handleSelectAll = () => {
+    const allSpecific = options.filter(o => o.value !== "ALL").map(o => o.value);
+    onMultiChange?.(allSpecific);
+  };
+
+  const handleClearAll = () => {
+    if (multiSelect) {
+      onMultiChange?.([]);
+    } else {
+      onChange?.("ALL");
+    }
+  };
+
+  const isAllSelected = useMemo(() => {
+    const specificOptions = options.filter(o => o.value !== "ALL");
+    return specificOptions.length > 0 && specificOptions.every(o => selectedList.includes(o.value));
+  }, [options, selectedList]);
+
   return (
     <div className="relative inline-block text-left" ref={dropdownRef}>
       {/* Trigger Button */}
@@ -125,17 +226,17 @@ const CustomFilterDropdown: React.FC<CustomFilterDropdownProps> = ({
         onClick={() => setIsOpen(!isOpen)}
         className={`h-9 px-3 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 border cursor-pointer whitespace-nowrap shadow-2xs select-none ${
           isCustomActive
-            ? "bg-blue-50 text-[#0052FF] border-[#0052FF]/60 shadow-xs"
+            ? "bg-blue-50 text-[#0052FF] border-[#0052FF]/60 shadow-xs ring-1 ring-[#0052FF]/20"
             : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-300"
         }`}
       >
         {icon && <span className="shrink-0">{icon}</span>}
         <span className="truncate max-w-[130px] sm:max-w-[170px]">
-          {isCustomActive ? selectedOption?.label : label}
+          {triggerLabel}
         </span>
-        {isCustomActive && selectedOption?.count !== undefined && (
+        {isCustomActive && totalSelectedCount !== undefined && (
           <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-[#0052FF] text-white font-mono">
-            {selectedOption.count}
+            {totalSelectedCount}
           </span>
         )}
         <ChevronDown
@@ -153,71 +254,124 @@ const CustomFilterDropdown: React.FC<CustomFilterDropdownProps> = ({
             className="fixed inset-0 z-40 bg-slate-950/20 backdrop-blur-2xs sm:hidden"
             onClick={() => setIsOpen(false)}
           />
-          <div className="fixed inset-x-3.5 bottom-6 sm:bottom-auto sm:inset-x-auto sm:absolute sm:left-0 sm:right-auto sm:top-full mt-1.5 w-auto sm:w-64 max-w-none sm:max-w-[90vw] rounded-2xl bg-white border border-slate-200 shadow-2xl z-50 p-2 animate-in fade-in slide-in-from-bottom-3 sm:slide-in-from-top-2 duration-150">
-          {/* Header */}
-          <div className="px-2.5 py-1.5 border-b border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-            <span>{label}</span>
-            {isCustomActive && (
-              <button
-                type="button"
-                onClick={() => {
-                  onChange("ALL");
-                  setIsOpen(false);
-                }}
-                className="text-[10px] font-bold text-[#0052FF] hover:underline cursor-pointer"
-              >
-                Clear
-              </button>
+          <div className="fixed inset-x-3.5 bottom-6 sm:bottom-auto sm:inset-x-auto sm:absolute sm:left-0 sm:right-auto sm:top-full mt-1.5 w-auto sm:w-72 max-w-none sm:max-w-[90vw] rounded-2xl bg-white border border-slate-200 shadow-2xl z-50 p-2 animate-in fade-in slide-in-from-bottom-3 sm:slide-in-from-top-2 duration-150">
+            {/* Header */}
+            <div className="px-2.5 py-1.5 border-b border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              <span>{label}</span>
+              <div className="flex items-center space-x-2">
+                {isCustomActive && (
+                  <button
+                    type="button"
+                    onClick={handleClearAll}
+                    className="text-[10px] font-bold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+                {multiSelect && !isAllSelected && options.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={handleSelectAll}
+                    className="text-[10px] font-bold text-[#0052FF] hover:underline cursor-pointer"
+                  >
+                    Select All
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* In-Dropdown Search Option */}
+            {enableSearch && options.length > 4 && (
+              <div className="p-1.5 border-b border-slate-100">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchFilter}
+                    onChange={(e) => setSearchFilter(e.target.value)}
+                    placeholder={searchPlaceholder || `Search ${label.toLowerCase()}...`}
+                    className="w-full pl-8 pr-6 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-[#0052FF] focus:outline-none transition-all"
+                    autoFocus
+                  />
+                  {searchFilter && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchFilter("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
             )}
-          </div>
 
-          {/* Scrollable List */}
-          <div className="max-h-60 overflow-y-auto py-1 space-y-0.5 custom-scrollbar">
-            {options.map((opt) => {
-              const isSelected = opt.value === value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => {
-                    onChange(opt.value);
-                    setIsOpen(false);
-                  }}
-                  className={`w-full px-2.5 py-2 rounded-xl text-xs flex items-center justify-between space-x-2 transition-all cursor-pointer text-left ${
-                    isSelected
-                      ? "bg-blue-50 text-[#0052FF] font-bold"
-                      : "text-slate-700 hover:bg-slate-50 font-medium"
-                  }`}
-                >
-                  <div className="flex items-center space-x-2 truncate pr-2">
-                    {opt.icon && <span className="shrink-0">{opt.icon}</span>}
-                    <span className="truncate">{opt.label}</span>
-                  </div>
+            {/* Scrollable List */}
+            <div className="max-h-60 overflow-y-auto py-1 space-y-0.5 custom-scrollbar">
+              {filteredOptions.length === 0 ? (
+                <div className="px-3 py-4 text-center text-xs text-slate-400 font-medium">
+                  No matching options found
+                </div>
+              ) : (
+                filteredOptions.map((opt) => {
+                  const isAllOption = opt.value === "ALL";
+                  const isSelected = isAllOption 
+                    ? !isCustomActive 
+                    : selectedList.includes(opt.value);
 
-                  <div className="flex items-center space-x-1.5 shrink-0">
-                    {opt.count !== undefined && (
-                      <span
-                        className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold font-mono ${
-                          opt.badgeClass ||
-                          (isSelected
-                            ? "bg-[#0052FF]/10 text-[#0052FF]"
-                            : "bg-slate-100 text-slate-600")
-                        }`}
-                      >
-                        {opt.count}
-                      </span>
-                    )}
-                    {isSelected && (
-                      <Check className="w-3.5 h-3.5 text-[#0052FF] shrink-0" />
-                    )}
-                  </div>
-                </button>
-              );
-            })}
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => handleToggleOption(opt.value)}
+                      className={`w-full px-2.5 py-2 rounded-xl text-xs flex items-center justify-between space-x-2 transition-all cursor-pointer text-left group ${
+                        isSelected
+                          ? "bg-blue-50/80 text-[#0052FF] font-bold"
+                          : "text-slate-700 hover:bg-slate-50 font-medium"
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2.5 truncate pr-2">
+                        {multiSelect && !isAllOption ? (
+                          <div
+                            className={`w-4 h-4 rounded-md flex items-center justify-center border transition-all shrink-0 ${
+                              isSelected
+                                ? "bg-[#0052FF] border-[#0052FF] text-white shadow-2xs"
+                                : "border-slate-300 bg-white group-hover:border-slate-400"
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+                        ) : (
+                          opt.icon && <span className="shrink-0">{opt.icon}</span>
+                        )}
+                        <span className="truncate">{opt.label}</span>
+                      </div>
+
+                      <div className="flex items-center space-x-1.5 shrink-0">
+                        {opt.count !== undefined && (
+                          <span
+                            className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold font-mono ${
+                              opt.badgeClass ||
+                              (isSelected
+                                ? "bg-[#0052FF]/10 text-[#0052FF]"
+                                : "bg-slate-100 text-slate-600")
+                            }`}
+                          >
+                            {opt.count}
+                          </span>
+                        )}
+                        {!multiSelect && isSelected && (
+                          <Check className="w-3.5 h-3.5 text-[#0052FF] shrink-0" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
-        </div>
-      </>
-    )}
+        </>
+      )}
     </div>
   );
 };
@@ -256,7 +410,6 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
     brandPoc.trim().toUpperCase() !== "N/A" &&
     brandPoc.trim() !== "Brand Manager"
   );
-  const displayBrandPoc = hasBrandPoc ? brandPoc.trim() : "N/A";
 
   const [viewMode, setViewMode] = useState<"table" | "kanban" | "cards">("table");
 
@@ -269,9 +422,11 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
 
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
-  const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
-  const [stageFilter, setStageFilter] = useState<string>("ALL");
-  const [campaignFilter, setCampaignFilter] = useState<string>("ALL");
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [stageFilter, setStageFilter] = useState<string[]>([]);
+  const [campaignFilter, setCampaignFilter] = useState<string[]>([]);
+  const [xceleratePocFilter, setXceleratePocFilter] = useState<string[]>([]);
+  const [brandPocFilter, setBrandPocFilter] = useState<string[]>([]);
   const [selectedCreator, setSelectedCreator] = useState<CreatorDeliverableBrandView | CreatorDeliverableInternal | null>(null);
   const [lightboxScreenshot, setLightboxScreenshot] = useState<ScreenshotLightboxState | null>(null);
   const [isAutomating, setIsAutomating] = useState(false);
@@ -575,49 +730,161 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
     ];
   }, [categoryCounts]);
 
+  // Derive unique campaign/brief options with counts
   const campaignDropdownOptions: DropdownOption[] = useMemo(() => {
+    const map = new Map<string, number>();
+    deliverables.forEach((d) => {
+      const name = (d.brief_name || d.campaign_name || d.org_name || "").trim();
+      if (name) {
+        map.set(name, (map.get(name) || 0) + 1);
+      }
+    });
+
+    const items = Array.from(map.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({
+        value: name,
+        label: name,
+        count,
+        icon: <Building2 className="w-3.5 h-3.5 text-indigo-500" />,
+      }));
+
     return [
       {
         value: "ALL",
-        label: "All Campaigns & Brands",
+        label: "All Campaigns & Briefs",
         count: deliverables.length,
         icon: <Briefcase className="w-3.5 h-3.5 text-slate-400" />,
       },
-      ...campaignOptions.map((c) => ({
-        value: c.value,
-        label: c.label,
-        count: c.count,
-        icon: <Building2 className="w-3.5 h-3.5 text-indigo-500" />,
-      })),
+      ...items,
     ];
-  }, [deliverables, campaignOptions]);
+  }, [deliverables]);
+
+  // Derive unique Xcelerate POC options with deliverable counts
+  const xceleratePocOptions: DropdownOption[] = useMemo(() => {
+    const map = new Map<string, number>();
+    deliverables.forEach((d) => {
+      const poc = (d.execution_owner || (d as any).xcelerate_poc || "").trim();
+      if (poc) {
+        map.set(poc, (map.get(poc) || 0) + 1);
+      }
+    });
+
+    const items = Array.from(map.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({
+        value: name,
+        label: name,
+        count,
+        icon: <UserCheck className="w-3.5 h-3.5 text-blue-500" />,
+      }));
+
+    return [
+      {
+        value: "ALL",
+        label: "All Xcelerate POCs",
+        count: deliverables.length,
+        icon: <UserCheck className="w-3.5 h-3.5 text-slate-400" />,
+      },
+      ...items,
+    ];
+  }, [deliverables]);
+
+  // Derive unique Brand POC options with deliverable counts
+  const brandPocOptions: DropdownOption[] = useMemo(() => {
+    const map = new Map<string, number>();
+    let naCount = 0;
+    deliverables.forEach((d) => {
+      const bp = (d.brand_agency_poc || "").trim();
+      if (bp && bp.toUpperCase() !== "N/A" && bp !== "Brand Manager") {
+        map.set(bp, (map.get(bp) || 0) + 1);
+      } else {
+        naCount++;
+      }
+    });
+
+    const items = Array.from(map.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({
+        value: name,
+        label: name,
+        count,
+        icon: <Users className="w-3.5 h-3.5 text-emerald-500" />,
+      }));
+
+    if (naCount > 0) {
+      items.push({
+        value: "N/A",
+        label: "Unassigned / N/A",
+        count: naCount,
+        icon: <Users className="w-3.5 h-3.5 text-slate-400" />,
+      });
+    }
+
+    return [
+      {
+        value: "ALL",
+        label: "All Brand POCs",
+        count: deliverables.length,
+        icon: <Users className="w-3.5 h-3.5 text-slate-400" />,
+      },
+      ...items,
+    ];
+  }, [deliverables]);
+
+  // Dynamic POC labels displayed in top summary cards
+  const displayXceleratePoc = useMemo(() => {
+    if (xceleratePocFilter.length === 1) return xceleratePocFilter[0];
+    if (xceleratePocFilter.length > 1) return `${xceleratePocFilter.length} POCs Selected`;
+    return xceleratePoc || "All Ops Leads";
+  }, [xceleratePocFilter, xceleratePoc]);
+
+  const displayBrandPoc = useMemo(() => {
+    if (brandPocFilter.length === 1) return brandPocFilter[0];
+    if (brandPocFilter.length > 1) return `${brandPocFilter.length} POCs Selected`;
+    return hasBrandPoc ? brandPoc.trim() : "Multiple POCs";
+  }, [brandPocFilter, hasBrandPoc, brandPoc]);
 
   const isFilterActive = 
     searchQuery.trim() !== "" || 
-    categoryFilter !== "ALL" || 
-    stageFilter !== "ALL" || 
-    campaignFilter !== "ALL";
+    (categoryFilter.length > 0 && !categoryFilter.includes("ALL")) || 
+    (stageFilter.length > 0 && !stageFilter.includes("ALL")) || 
+    (campaignFilter.length > 0 && !campaignFilter.includes("ALL")) ||
+    (xceleratePocFilter.length > 0 && !xceleratePocFilter.includes("ALL")) ||
+    (brandPocFilter.length > 0 && !brandPocFilter.includes("ALL"));
 
-  const handleCategoryFilterChange = (val: string) => {
-    setCategoryFilter(val);
+  const handleCategoryFilterChange = (vals: string[]) => {
+    setCategoryFilter(vals);
     setCurrentPage(1);
   };
 
-  const handleStageFilterChange = (val: string) => {
-    setStageFilter(val);
+  const handleStageFilterChange = (vals: string[]) => {
+    setStageFilter(vals);
     setCurrentPage(1);
   };
 
-  const handleCampaignFilterChange = (val: string) => {
-    setCampaignFilter(val);
+  const handleCampaignFilterChange = (vals: string[]) => {
+    setCampaignFilter(vals);
+    setCurrentPage(1);
+  };
+
+  const handleXceleratePocFilterChange = (vals: string[]) => {
+    setXceleratePocFilter(vals);
+    setCurrentPage(1);
+  };
+
+  const handleBrandPocFilterChange = (vals: string[]) => {
+    setBrandPocFilter(vals);
     setCurrentPage(1);
   };
 
   const handleResetFilters = () => {
     setSearchQuery("");
-    setCategoryFilter("ALL");
-    setStageFilter("ALL");
-    setCampaignFilter("ALL");
+    setCategoryFilter([]);
+    setStageFilter([]);
+    setCampaignFilter([]);
+    setXceleratePocFilter([]);
+    setBrandPocFilter([]);
     setCurrentPage(1);
   };
 
@@ -625,7 +892,7 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
   const filtered = useMemo(() => {
     const q = deferredSearchQuery.toLowerCase().trim();
     return deliverables.filter((item) => {
-      // 1. Text Search across creator, niche, city, spec, campaign name, brand/org
+      // 1. Text Search across creator, niche, city, spec, campaign name, brand/org, POCs
       const matchesSearch = 
         !q ||
         (item.creator_name && item.creator_name.toLowerCase().includes(q)) ||
@@ -634,80 +901,135 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
         (item.deliverables && item.deliverables.toLowerCase().includes(q)) ||
         (item.category && item.category.toLowerCase().includes(q)) ||
         (item.campaign_name && item.campaign_name.toLowerCase().includes(q)) ||
+        (item.brief_name && item.brief_name.toLowerCase().includes(q)) ||
         (item.org_name && item.org_name.toLowerCase().includes(q)) ||
+        (item.execution_owner && item.execution_owner.toLowerCase().includes(q)) ||
+        ((item as any).xcelerate_poc && (item as any).xcelerate_poc.toLowerCase().includes(q)) ||
+        (item.brand_agency_poc && item.brand_agency_poc.toLowerCase().includes(q)) ||
         (item.script_status && item.script_status.toLowerCase().includes(q)) ||
         (item.first_draft_status && item.first_draft_status.toLowerCase().includes(q)) ||
         (item.execution_status && item.execution_status.toLowerCase().includes(q));
 
-      // 2. Category Tier Filter
-      const cat = (item.category || "").trim().toLowerCase();
-      const matchesCategory = 
-        categoryFilter === "ALL" || 
-        cat === categoryFilter.toLowerCase() ||
-        (categoryFilter.toLowerCase() === "mega" && item.followers_count >= 1_000_000) ||
-        (categoryFilter.toLowerCase() === "macro" && item.followers_count >= 100_000 && item.followers_count < 1_000_000) ||
-        (categoryFilter.toLowerCase() === "micro" && item.followers_count >= 10_000 && item.followers_count < 100_000) ||
-        (categoryFilter.toLowerCase() === "nano" && item.followers_count < 10_000);
+      if (!matchesSearch) return false;
 
-      // 3. Campaign / Brand Filter
-      const matchesCampaign = 
-        campaignFilter === "ALL" ||
-        (item.campaign_name && item.campaign_name.trim().toLowerCase() === campaignFilter.toLowerCase()) ||
-        (item.org_name && item.org_name.trim().toLowerCase() === campaignFilter.toLowerCase()) ||
-        (item.campaign_id && item.campaign_id.trim().toLowerCase() === campaignFilter.toLowerCase());
-
-      // 4. Execution & Workflow Status Filter
-      const isDropped = Boolean(
-        item.execution_status === "Drop" ||
-        item.script_status === "Drop" ||
-        item.first_draft_status === "Drop" ||
-        item.final_video_status === "Drop" ||
-        item.confirmation_mail_status === "Drop"
-      );
-
-      const matchesStage = (() => {
-        if (stageFilter === "ALL") return true;
-        if (stageFilter === "ACTIVE") return !isDropped;
-        if (stageFilter === "DROP") return isDropped;
-        if (stageFilter === "COMPLETED" || stageFilter === "LIVE") {
-          return !isDropped && (item.execution_status === "Completed" || Boolean(item.live_link));
-        }
-        if (stageFilter === "IN_WORKFLOW" || stageFilter === "IN_PROGRESS" || stageFilter === "On Going") {
-          return !isDropped && item.execution_status !== "Completed" && !item.live_link && item.execution_status !== "Hold";
-        }
-        if (stageFilter === "STAGE_1") return !isDropped && item.script_status !== "Approved" && !item.live_link;
-        if (stageFilter === "STAGE_2") return !isDropped && item.script_status === "Approved" && item.final_video_status !== "Approved" && !item.live_link;
-        if (stageFilter === "STAGE_3") return !isDropped && item.final_video_status === "Approved" && !item.live_link;
-        if (stageFilter === "REVISION") return !isDropped && Boolean(item.first_draft_status?.toLowerCase().includes("revision") || item.first_draft_status?.toLowerCase().includes("reshoot"));
-        if (stageFilter === "WITH_METRICS" || stageFilter === "HAS_METRICS") {
-          return !isDropped && (
-            (item.total_views || 0) > 0 ||
-            (item.likes || 0) > 0 ||
-            (item.account_reach || 0) > 0 ||
-            ((item as any).day7_views || 0) > 0 ||
-            ((item as any).day15_views || 0) > 0 ||
-            ((item as any).day30_views || 0) > 0 ||
-            Boolean(item.live_link)
+      // 2. Campaign / Brief Filter (Multi-select)
+      if (campaignFilter.length > 0 && !campaignFilter.includes("ALL")) {
+        const matchesCamp = campaignFilter.some((cf) => {
+          const cfLower = cf.toLowerCase().trim();
+          return (
+            (item.campaign_name && item.campaign_name.trim().toLowerCase() === cfLower) ||
+            (item.brief_name && item.brief_name.trim().toLowerCase() === cfLower) ||
+            (item.org_name && item.org_name.trim().toLowerCase() === cfLower) ||
+            (item.campaign_id && item.campaign_id.trim().toLowerCase() === cfLower)
           );
-        }
-        if (stageFilter === "NO_METRICS" || stageFilter === "AWAITING_METRICS") {
-          return !isDropped && (
-            (!item.total_views || item.total_views === 0) &&
-            (!item.likes || item.likes === 0) &&
-            (!item.account_reach || item.account_reach === 0) &&
-            (!((item as any).day7_views) || (item as any).day7_views === 0) &&
-            (!((item as any).day15_views) || (item as any).day15_views === 0) &&
-            (!((item as any).day30_views) || (item as any).day30_views === 0) &&
-            !item.live_link
-          );
-        }
-        if (stageFilter === "HOLD") return !isDropped && item.execution_status === "Hold";
-        return item.execution_status === stageFilter;
-      })();
+        });
+        if (!matchesCamp) return false;
+      }
 
-      return matchesSearch && matchesCategory && matchesCampaign && matchesStage;
+      // 3. Xcelerate POC Filter (Multi-select)
+      if (xceleratePocFilter.length > 0 && !xceleratePocFilter.includes("ALL")) {
+        const matchesPoc = xceleratePocFilter.some((poc) => {
+          const pocLower = poc.toLowerCase().trim();
+          const owner = (item.execution_owner || "").toLowerCase().trim();
+          const xPoc = ((item as any).xcelerate_poc || "").toLowerCase().trim();
+          return owner === pocLower || xPoc === pocLower;
+        });
+        if (!matchesPoc) return false;
+      }
+
+      // 4. Brand / Agency POC Filter (Multi-select)
+      if (brandPocFilter.length > 0 && !brandPocFilter.includes("ALL")) {
+        const matchesBrandPoc = brandPocFilter.some((bp) => {
+          const bpLower = bp.toLowerCase().trim();
+          const itemBp = (item.brand_agency_poc || "").toLowerCase().trim();
+          if (bpLower === "n/a" || bpLower === "unassigned") {
+            return !itemBp || itemBp === "n/a" || itemBp === "unassigned";
+          }
+          return itemBp === bpLower;
+        });
+        if (!matchesBrandPoc) return false;
+      }
+
+      // 5. Creator Category Tier Filter (Multi-select)
+      if (categoryFilter.length > 0 && !categoryFilter.includes("ALL")) {
+        const cat = (item.category || "").trim().toLowerCase();
+        const matchesCat = categoryFilter.some((cVal) => {
+          const cLower = cVal.toLowerCase();
+          return (
+            cat === cLower ||
+            (cLower === "mega" && item.followers_count >= 1_000_000) ||
+            (cLower === "macro" && item.followers_count >= 100_000 && item.followers_count < 1_000_000) ||
+            (cLower === "micro" && item.followers_count >= 10_000 && item.followers_count < 100_000) ||
+            (cLower === "nano" && item.followers_count < 10_000)
+          );
+        });
+        if (!matchesCat) return false;
+      }
+
+      // 6. Execution & Workflow Status Filter (Multi-select)
+      if (stageFilter.length > 0 && !stageFilter.includes("ALL")) {
+        const isDropped = Boolean(
+          item.execution_status === "Drop" ||
+          item.script_status === "Drop" ||
+          item.first_draft_status === "Drop" ||
+          item.final_video_status === "Drop" ||
+          item.confirmation_mail_status === "Drop"
+        );
+
+        const matchesSt = stageFilter.some((stVal) => {
+          if (stVal === "ALL") return true;
+          if (stVal === "ACTIVE") return !isDropped;
+          if (stVal === "DROP") return isDropped;
+          if (stVal === "COMPLETED" || stVal === "LIVE") {
+            return !isDropped && (item.execution_status === "Completed" || Boolean(item.live_link));
+          }
+          if (stVal === "IN_WORKFLOW" || stVal === "IN_PROGRESS" || stVal === "On Going") {
+            return !isDropped && item.execution_status !== "Completed" && !item.live_link && item.execution_status !== "Hold";
+          }
+          if (stVal === "STAGE_1") return !isDropped && item.script_status !== "Approved" && !item.live_link;
+          if (stVal === "STAGE_2") return !isDropped && item.script_status === "Approved" && item.final_video_status !== "Approved" && !item.live_link;
+          if (stVal === "STAGE_3") return !isDropped && item.final_video_status === "Approved" && !item.live_link;
+          if (stVal === "REVISION") return !isDropped && Boolean(item.first_draft_status?.toLowerCase().includes("revision") || item.first_draft_status?.toLowerCase().includes("reshoot"));
+          if (stVal === "WITH_METRICS" || stVal === "HAS_METRICS") {
+            return !isDropped && (
+              (item.total_views || 0) > 0 ||
+              (item.likes || 0) > 0 ||
+              (item.account_reach || 0) > 0 ||
+              ((item as any).day7_views || 0) > 0 ||
+              ((item as any).day15_views || 0) > 0 ||
+              ((item as any).day30_views || 0) > 0 ||
+              Boolean(item.live_link)
+            );
+          }
+          if (stVal === "NO_METRICS" || stVal === "AWAITING_METRICS") {
+            return !isDropped && (
+              (!item.total_views || item.total_views === 0) &&
+              (!item.likes || item.likes === 0) &&
+              (!item.account_reach || item.account_reach === 0) &&
+              (!((item as any).day7_views) || (item as any).day7_views === 0) &&
+              (!((item as any).day15_views) || (item as any).day15_views === 0) &&
+              (!((item as any).day30_views) || (item as any).day30_views === 0) &&
+              !item.live_link
+            );
+          }
+          if (stVal === "HOLD") return !isDropped && item.execution_status === "Hold";
+          return item.execution_status === stVal;
+        });
+
+        if (!matchesSt) return false;
+      }
+
+      return true;
     });
-  }, [deliverables, deferredSearchQuery, categoryFilter, campaignFilter, stageFilter]);
+  }, [
+    deliverables, 
+    deferredSearchQuery, 
+    campaignFilter, 
+    xceleratePocFilter, 
+    brandPocFilter, 
+    categoryFilter, 
+    stageFilter
+  ]);
 
   // Sorted list for table view
   const sortedAndFiltered = useMemo(() => {
@@ -964,23 +1286,17 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
           <div>
             <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Xcelerate POC</div>
             <div className="text-sm font-extrabold text-slate-900 flex items-center space-x-1.5 mt-0.5">
-              <span>{xceleratePoc}</span>
+              <span>{displayXceleratePoc}</span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-[#0052FF] border border-blue-200 font-bold">Agency Lead</span>
             </div>
           </div>
 
           <div className="sm:border-l sm:border-slate-200 sm:pl-6 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
             <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Brand / Agency POC</div>
-            {hasBrandPoc ? (
-              <div className="text-sm font-extrabold text-slate-900 flex items-center space-x-1.5 mt-0.5">
-                <span>{displayBrandPoc}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">Client Lead</span>
-              </div>
-            ) : (
-              <div className="text-sm font-bold text-slate-400 mt-0.5">
-                N/A
-              </div>
-            )}
+            <div className="text-sm font-extrabold text-slate-900 flex items-center space-x-1.5 mt-0.5">
+              <span>{displayBrandPoc}</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">Client Lead</span>
+            </div>
           </div>
 
           <div className="sm:border-l sm:border-slate-200 sm:pl-6 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
@@ -1063,15 +1379,46 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
 
         {/* Filter Controls Row — Compact, Perfectly Aligned h-9 Controls */}
         <div className="flex items-center flex-wrap gap-2 justify-start lg:justify-end">
-          {/* Campaign / Brand Filter (Shown when multiple campaigns or consolidated overview) */}
-          {campaignOptions.length > 1 && (
+          {/* Campaign / Brief Filter */}
+          <CustomFilterDropdown
+            id="campaign-filter-dropdown"
+            label="All Campaigns"
+            selectedValues={campaignFilter}
+            options={campaignDropdownOptions}
+            onMultiChange={handleCampaignFilterChange}
+            multiSelect={true}
+            enableSearch={true}
+            searchPlaceholder="Search campaigns & briefs..."
+            icon={<Briefcase className="w-3.5 h-3.5 text-slate-500" />}
+          />
+
+          {/* Xcelerate POC Filter */}
+          {xceleratePocOptions.length > 1 && (
             <CustomFilterDropdown
-              id="campaign-filter-dropdown"
-              label="All Campaigns"
-              value={campaignFilter}
-              options={campaignDropdownOptions}
-              onChange={handleCampaignFilterChange}
-              icon={<Briefcase className="w-3.5 h-3.5 text-slate-500" />}
+              id="xcelerate-poc-filter-dropdown"
+              label="Xcelerate POC"
+              selectedValues={xceleratePocFilter}
+              options={xceleratePocOptions}
+              onMultiChange={handleXceleratePocFilterChange}
+              multiSelect={true}
+              enableSearch={true}
+              searchPlaceholder="Search Xcelerate POCs..."
+              icon={<UserCheck className="w-3.5 h-3.5 text-slate-500" />}
+            />
+          )}
+
+          {/* Brand POC Filter */}
+          {brandPocOptions.length > 1 && (
+            <CustomFilterDropdown
+              id="brand-poc-filter-dropdown"
+              label="Brand POC"
+              selectedValues={brandPocFilter}
+              options={brandPocOptions}
+              onMultiChange={handleBrandPocFilterChange}
+              multiSelect={true}
+              enableSearch={true}
+              searchPlaceholder="Search Brand POCs..."
+              icon={<Users className="w-3.5 h-3.5 text-slate-500" />}
             />
           )}
 
@@ -1079,9 +1426,12 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
           <CustomFilterDropdown
             id="status-filter-dropdown"
             label="All Statuses"
-            value={stageFilter}
+            selectedValues={stageFilter}
             options={statusDropdownOptions}
-            onChange={handleStageFilterChange}
+            onMultiChange={handleStageFilterChange}
+            multiSelect={true}
+            enableSearch={true}
+            searchPlaceholder="Search statuses..."
             icon={<Activity className="w-3.5 h-3.5 text-slate-500" />}
           />
 
@@ -1089,9 +1439,12 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
           <CustomFilterDropdown
             id="category-filter-dropdown"
             label="All Categories"
-            value={categoryFilter}
+            selectedValues={categoryFilter}
             options={categoryDropdownOptions}
-            onChange={handleCategoryFilterChange}
+            onMultiChange={handleCategoryFilterChange}
+            multiSelect={true}
+            enableSearch={true}
+            searchPlaceholder="Search categories..."
             icon={<Layers className="w-3.5 h-3.5 text-slate-500" />}
           />
 

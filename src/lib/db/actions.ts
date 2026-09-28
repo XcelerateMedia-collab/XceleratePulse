@@ -171,6 +171,7 @@ function mapRowToDeliverable(r: any): CreatorDeliverableInternal {
     day30_avg_watch_time: r.day30_avg_watch_time ? String(r.day30_avg_watch_time) : undefined,
     day30_screenshot: r.day30_screenshot ? String(r.day30_screenshot) : undefined,
     execution_owner: r.execution_owner ? String(r.execution_owner) : undefined,
+    xcelerate_poc: r.xcelerate_poc ? String(r.xcelerate_poc) : (r.execution_owner ? String(r.execution_owner) : undefined),
     brief_name: r.brief_name ? String(r.brief_name) : undefined,
     brand_agency_poc: r.brand_agency_poc ? String(r.brand_agency_poc) : undefined,
     creator_payment_cycle: r.creator_payment_cycle ? String(r.creator_payment_cycle) : undefined,
@@ -231,7 +232,10 @@ export async function getCampaignDeliverables(
         c.campaign_name,
         c.org_name,
         c.client_type,
-        c.campaign_month
+        c.campaign_month,
+        c.xcelerate_poc,
+        COALESCE(NULLIF(d.brand_agency_poc, ''), c.brand_agency_poc) as brand_agency_poc,
+        COALESCE(NULLIF(d.brief_name, ''), c.brief_name) as brief_name
       FROM campaign_creators d
       LEFT JOIN campaigns c ON d.campaign_id = c.id
     `;
@@ -317,7 +321,10 @@ export async function getCampaignDeliverables(
       c.campaign_name,
       c.org_name,
       c.client_type,
-      c.campaign_month
+      c.campaign_month,
+      c.xcelerate_poc,
+      COALESCE(NULLIF(d.brand_agency_poc, ''), c.brand_agency_poc) as brand_agency_poc,
+      COALESCE(NULLIF(d.brief_name, ''), c.brief_name) as brief_name
     FROM campaign_creators d
     JOIN campaigns c ON d.campaign_id = c.id
     WHERE d.campaign_id = ?

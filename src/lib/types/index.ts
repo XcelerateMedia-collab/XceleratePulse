@@ -119,6 +119,7 @@ export interface CreatorDeliverableInternal {
   day30_screenshot?: string;
   // Employee Execution & Invoicing Fields
   execution_owner?: string;
+  xcelerate_poc?: string;
   brief_name?: string;
   brand_agency_poc?: string;
   creator_payment_cycle?: string;
