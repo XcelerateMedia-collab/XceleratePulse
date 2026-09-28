@@ -1252,7 +1252,9 @@ export async function resetDatabaseCleanSlate(
       const delivRes = await db.execute({
         sql: `DELETE FROM campaign_creators 
               WHERE LOWER(COALESCE(execution_owner, '')) = LOWER(?) 
-                 OR LOWER(COALESCE(xcelerate_poc, '')) = LOWER(?)`,
+                 OR campaign_id IN (
+                   SELECT id FROM campaigns WHERE LOWER(COALESCE(xcelerate_poc, '')) = LOWER(?)
+                 )`,
         args: [employee, employee]
       });
 
@@ -1300,19 +1302,23 @@ export async function getEmployeeSheets(): Promise<EmployeeSheet[]> {
     `);
 
     // For each employee, also dynamically check actual rows in campaign_creators
-    const countsRes = await db.execute(`
-      SELECT LOWER(COALESCE(execution_owner, '')) as owner, LOWER(COALESCE(xcelerate_poc, '')) as poc, COUNT(id) as count
-      FROM campaign_creators
-      GROUP BY LOWER(COALESCE(execution_owner, '')), LOWER(COALESCE(xcelerate_poc, ''))
-    `);
-
     const ownerCounts: Record<string, number> = {};
-    for (const r of countsRes.rows as any[]) {
-      const o = String(r.owner || "").trim();
-      const p = String(r.poc || "").trim();
-      const cnt = Number(r.count || 0);
-      if (o) ownerCounts[o] = (ownerCounts[o] || 0) + cnt;
-      if (p && p !== o) ownerCounts[p] = (ownerCounts[p] || 0) + cnt;
+    try {
+      const countsRes = await db.execute(`
+        SELECT LOWER(COALESCE(d.execution_owner, c.xcelerate_poc, '')) as owner, COUNT(d.id) as count
+        FROM campaign_creators d
+        LEFT JOIN campaigns c ON d.campaign_id = c.id
+        WHERE d.execution_owner IS NOT NULL OR c.xcelerate_poc IS NOT NULL
+        GROUP BY LOWER(COALESCE(d.execution_owner, c.xcelerate_poc, ''))
+      `);
+
+      for (const r of countsRes.rows as any[]) {
+        const o = String(r.owner || "").trim();
+        const cnt = Number(r.count || 0);
+        if (o) ownerCounts[o] = (ownerCounts[o] || 0) + cnt;
+      }
+    } catch (countErr) {
+      console.warn("Could not query dynamic campaign_creators counts:", countErr);
     }
 
     return res.rows.map((r: any) => {

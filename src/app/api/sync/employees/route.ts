@@ -11,8 +11,8 @@ import { db, initDatabase } from "@/lib/db";
 /**
  * Helper to call Google Apps Script Web App
  */
-async function callAppsScript(action: string, params: Record<string, string> = {}) {
-  const targetUrl = (process.env.GOOGLE_APPS_SCRIPT_WEBAPP_URL || process.env.NEXT_PUBLIC_GOOGLE_APPS_SCRIPT_WEBAPP_URL || "").trim();
+async function callAppsScript(action: string, params: Record<string, string> = {}, customUrl?: string) {
+  const targetUrl = (customUrl || process.env.GOOGLE_APPS_SCRIPT_WEBAPP_URL || process.env.NEXT_PUBLIC_GOOGLE_APPS_SCRIPT_WEBAPP_URL || "").trim();
   if (!targetUrl || !targetUrl.startsWith("http")) return null;
 
   try {
@@ -53,8 +53,8 @@ export async function GET(req: NextRequest) {
 
     let dbEmployees = await getEmployeeSheets();
 
-    // If database has 0 or 1 employee, or user explicitly requested sync with Google Sheet
-    if (forceSync || dbEmployees.length <= 1) {
+    // If database has 0 employees, or user explicitly requested sync with Google Sheet (?sync=true)
+    if (forceSync || dbEmployees.length === 0) {
       const remoteData = await callAppsScript("get_registry");
       if (remoteData && remoteData.success && Array.isArray(remoteData.registry)) {
         for (const item of remoteData.registry) {
@@ -94,8 +94,9 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
+    await initDatabase();
     const body = await req.json();
-    const { employee_name, sheet_id, tab_name = "ExecutionSheet", status = "Active", id } = body;
+    const { employee_name, sheet_id, tab_name = "ExecutionSheet", status = "Active", id, webAppUrl } = body;
 
     if (!employee_name || !String(employee_name).trim()) {
       return NextResponse.json({ success: false, error: "Employee name is required." }, { status: 400 });
@@ -108,7 +109,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Save to Database (Turso / SQLite)
     const dbResult = await saveEmployeeSheet({
-      id,
+      id: id ? String(id).trim() : undefined,
       employee_name: String(employee_name).trim(),
       sheet_id: cleanId,
       tab_name: String(tab_name).trim() || "ExecutionSheet",
@@ -126,7 +127,7 @@ export async function POST(req: NextRequest) {
         sheetId: cleanId,
         tabName: String(tab_name).trim() || "ExecutionSheet",
         status: status === "Paused" ? "Paused" : "Active",
-      });
+      }, webAppUrl);
     } catch (remoteErr) {
       console.warn("Failed to propagate employee to Google Sheet registry:", remoteErr);
     }

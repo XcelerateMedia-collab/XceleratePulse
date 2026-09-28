@@ -677,13 +677,22 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
           sheet_id: sheetId,
           tab_name: employeeFormData.tab_name.trim() || "ExecutionSheet",
           status: employeeFormData.status,
+          webAppUrl: webAppUrl || undefined,
         }),
       });
 
       const data = await res.json();
       if (data.success) {
-        if (Array.isArray(data.employees)) {
+        if (Array.isArray(data.employees) && data.employees.length > 0) {
           setEmployees(data.employees);
+        } else if (data.employee) {
+          setEmployees((prev) => {
+            const exists = prev.some((e) => e.employee_name.toLowerCase() === data.employee.employee_name.toLowerCase());
+            if (exists) {
+              return prev.map((e) => e.employee_name.toLowerCase() === data.employee.employee_name.toLowerCase() ? data.employee : e);
+            }
+            return [...prev, data.employee];
+          });
         } else {
           fetchEmployees();
         }
