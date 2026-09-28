@@ -8,7 +8,8 @@ import {
   CampaignSummary,
   BrandCredential,
   CampaignAccessMode,
-  sanitizeForBrand 
+  sanitizeForBrand,
+  EmployeeSheet
 } from "@/lib/types";
 
 /**
@@ -1271,5 +1272,213 @@ export async function resetDatabaseCleanSlate(
   }
 
   return { success: false, message: "Unknown scope type." };
+}
+
+/**
+ * Helper to extract raw sheet ID from full Google Spreadsheet URLs or raw strings
+ */
+export async function extractCleanSheetId(raw: string): Promise<string> {
+  if (!raw) return "";
+  const s = raw.trim();
+  const match = s.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (match && match[1]) {
+    return match[1];
+  }
+  return s;
+}
+
+/**
+ * Fetch all employee sheets registered in the database.
+ */
+export async function getEmployeeSheets(): Promise<EmployeeSheet[]> {
+  await initDatabase();
+  try {
+    const res = await db.execute(`
+      SELECT id, employee_name, sheet_id, tab_name, status, last_pulled_at, rows_ingested, created_at, updated_at
+      FROM employee_sheets
+      ORDER BY created_at ASC
+    `);
+
+    // For each employee, also dynamically check actual rows in campaign_creators
+    const countsRes = await db.execute(`
+      SELECT LOWER(COALESCE(execution_owner, '')) as owner, LOWER(COALESCE(xcelerate_poc, '')) as poc, COUNT(id) as count
+      FROM campaign_creators
+      GROUP BY LOWER(COALESCE(execution_owner, '')), LOWER(COALESCE(xcelerate_poc, ''))
+    `);
+
+    const ownerCounts: Record<string, number> = {};
+    for (const r of countsRes.rows as any[]) {
+      const o = String(r.owner || "").trim();
+      const p = String(r.poc || "").trim();
+      const cnt = Number(r.count || 0);
+      if (o) ownerCounts[o] = (ownerCounts[o] || 0) + cnt;
+      if (p && p !== o) ownerCounts[p] = (ownerCounts[p] || 0) + cnt;
+    }
+
+    return res.rows.map((r: any) => {
+      const empName = String(r.employee_name || "").trim();
+      const dbCount = ownerCounts[empName.toLowerCase()] ?? 0;
+      const storedCount = Number(r.rows_ingested || 0);
+
+      return {
+        id: String(r.id),
+        employee_name: empName,
+        sheet_id: String(r.sheet_id || ""),
+        tab_name: String(r.tab_name || "ExecutionSheet"),
+        status: (String(r.status || "Active").toLowerCase() === "paused" ? "Paused" : "Active") as "Active" | "Paused",
+        last_pulled_at: r.last_pulled_at ? String(r.last_pulled_at) : undefined,
+        rows_ingested: Math.max(dbCount, storedCount),
+        created_at: r.created_at ? String(r.created_at) : undefined,
+        updated_at: r.updated_at ? String(r.updated_at) : undefined,
+      };
+    });
+  } catch (err) {
+    console.error("Failed to get employee sheets:", err);
+    return [];
+  }
+}
+
+/**
+ * Add or update an employee sheet registration in the database.
+ */
+export async function saveEmployeeSheet(data: {
+  id?: string;
+  employee_name: string;
+  sheet_id: string;
+  tab_name?: string;
+  status?: "Active" | "Paused" | string;
+}): Promise<{ success: boolean; employee?: EmployeeSheet; message: string }> {
+  await initDatabase();
+
+  const name = String(data.employee_name || "").trim();
+  const cleanId = await extractCleanSheetId(data.sheet_id);
+  const tab = String(data.tab_name || "").trim() || "ExecutionSheet";
+  const status = (String(data.status || "Active").toLowerCase() === "paused" ? "Paused" : "Active");
+
+  if (!name) {
+    return { success: false, message: "Employee name is required." };
+  }
+  if (!cleanId) {
+    return { success: false, message: "A valid Google Sheet ID or URL is required." };
+  }
+
+  const id = data.id || `emp-${name.toLowerCase().replace(/[^a-z0-9]/g, "-")}-${Date.now().toString(36)}`;
+
+  try {
+    // Check if employee name already exists
+    const existing = await db.execute({
+      sql: `SELECT id FROM employee_sheets WHERE LOWER(employee_name) = LOWER(?) OR id = ?`,
+      args: [name, id]
+    });
+
+    if (existing.rows.length > 0) {
+      const existingId = String(existing.rows[0].id);
+      await db.execute({
+        sql: `UPDATE employee_sheets 
+              SET employee_name = ?, sheet_id = ?, tab_name = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+              WHERE id = ?`,
+        args: [name, cleanId, tab, status, existingId]
+      });
+      return {
+        success: true,
+        message: `Employee sheet for '${name}' updated successfully!`,
+        employee: {
+          id: existingId,
+          employee_name: name,
+          sheet_id: cleanId,
+          tab_name: tab,
+          status,
+          updated_at: new Date().toISOString()
+        }
+      };
+    } else {
+      await db.execute({
+        sql: `INSERT INTO employee_sheets (id, employee_name, sheet_id, tab_name, status, rows_ingested)
+              VALUES (?, ?, ?, ?, ?, 0)`,
+        args: [id, name, cleanId, tab, status]
+      });
+      return {
+        success: true,
+        message: `New employee sheet for '${name}' added to database!`,
+        employee: {
+          id,
+          employee_name: name,
+          sheet_id: cleanId,
+          tab_name: tab,
+          status,
+          rows_ingested: 0,
+          created_at: new Date().toISOString()
+        }
+      };
+    }
+  } catch (err: any) {
+    console.error("saveEmployeeSheet error:", err);
+    return { success: false, message: err.message || "Failed to save employee sheet." };
+  }
+}
+
+/**
+ * Delete an employee sheet from database.
+ */
+export async function deleteEmployeeSheet(id: string): Promise<{ success: boolean; message: string }> {
+  await initDatabase();
+  try {
+    const res = await db.execute({
+      sql: `DELETE FROM employee_sheets WHERE id = ? OR LOWER(employee_name) = LOWER(?)`,
+      args: [id, id]
+    });
+    if ((res.rowsAffected || 0) > 0) {
+      return { success: true, message: "Employee sheet removed from database." };
+    }
+    return { success: false, message: "Employee sheet not found." };
+  } catch (err: any) {
+    return { success: false, message: err.message || "Failed to delete employee sheet." };
+  }
+}
+
+/**
+ * Toggle employee sheet Active/Paused status.
+ */
+export async function toggleEmployeeSheetStatus(id: string): Promise<{ success: boolean; status?: string; message: string }> {
+  await initDatabase();
+  try {
+    const existing = await db.execute({
+      sql: `SELECT id, status, employee_name FROM employee_sheets WHERE id = ?`,
+      args: [id]
+    });
+    if (existing.rows.length === 0) {
+      return { success: false, message: "Employee sheet not found." };
+    }
+    const current = String(existing.rows[0].status || "Active");
+    const nextStatus = current.toLowerCase() === "active" ? "Paused" : "Active";
+    await db.execute({
+      sql: `UPDATE employee_sheets SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      args: [nextStatus, id]
+    });
+    return {
+      success: true,
+      status: nextStatus,
+      message: `Employee '${existing.rows[0].employee_name}' status set to ${nextStatus}.`
+    };
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
+/**
+ * Updates last_pulled_at and rows_ingested after a successful sync/pull.
+ */
+export async function updateEmployeeSheetStats(employeeName: string, rowsCount: number): Promise<void> {
+  await initDatabase();
+  try {
+    await db.execute({
+      sql: `UPDATE employee_sheets 
+            SET last_pulled_at = CURRENT_TIMESTAMP, rows_ingested = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE LOWER(employee_name) = LOWER(?)`,
+      args: [rowsCount, employeeName]
+    });
+  } catch (err) {
+    console.error("Failed to update employee sheet stats:", err);
+  }
 }
 

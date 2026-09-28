@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, initDatabase } from "@/lib/db";
 import { syncGoogleSheetRows } from "@/lib/sync/sheet-mapper";
+import { updateEmployeeSheetStats } from "@/lib/db/actions";
 
 export async function POST(req: NextRequest) {
   try {
@@ -64,6 +65,10 @@ export async function POST(req: NextRequest) {
       // When Apps Script returns rows array directly, write to Turso immediately!
       if (Array.isArray(data.rows) && data.rows.length > 0) {
         const syncRes = await syncGoogleSheetRows(data.rows);
+        const emp = data.employee || employee;
+        if (emp && (action === "pull_employee" || action.includes("employee"))) {
+          await updateEmployeeSheetStats(emp, syncRes.recordsProcessed);
+        }
         return NextResponse.json({
           success: true,
           action,
@@ -72,7 +77,7 @@ export async function POST(req: NextRequest) {
           totalAppended: syncRes.newCount,
           newCreators: syncRes.newCreators,
           message: `Successfully synchronized ${syncRes.recordsProcessed} deliverables (${syncRes.updatedCount} updated, ${syncRes.newCount} new rows added to database).`,
-          employee: data.employee || employee,
+          employee: emp,
         });
       }
 

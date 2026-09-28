@@ -202,7 +202,15 @@ function extractSheetId(input) {
 
 function getEmployeeSheetsList() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var configSheet = ss.getSheetByName("⚙️ Employee Sheets");
+  var configSheet = ss.getSheetByName("⚙️ Employee Sheets") || 
+                    ss.getSheetByName("Employee Sheets") ||
+                    (function() {
+                      var sheets = ss.getSheets();
+                      for (var s = 0; s < sheets.length; s++) {
+                        if (sheets[s].getName().toLowerCase().indexOf("employee") !== -1) return sheets[s];
+                      }
+                      return null;
+                    })();
 
   if (!configSheet || configSheet.getLastRow() < 2) {
     return DEFAULT_EMPLOYEE_SHEETS;
@@ -1661,6 +1669,62 @@ function handleRemoteApiRequest(e) {
         success: true,
         registry: registry
       };
+    } else if (action === "add_employee" || action === "save_employee") {
+      var empName = String(body.employee || p.employee || "").trim();
+      var rawId = String(body.sheetId || p.sheetId || body.sheet_id || p.sheet_id || "").trim();
+      var tabName = String(body.tabName || p.tabName || body.tab_name || p.tab_name || "ExecutionSheet").trim();
+      var status = String(body.status || p.status || "Active").trim();
+
+      var cleanId = extractSheetId(rawId);
+      if (!cleanId) {
+        output = { success: false, error: "Invalid Google Sheet ID or URL provided." };
+      } else if (!empName) {
+        output = { success: false, error: "Employee Name is required." };
+      } else {
+        var ss = SpreadsheetApp.getActiveSpreadsheet();
+        var configSheet = ss.getSheetByName("⚙️ Employee Sheets") || ss.getSheetByName("Employee Sheets");
+        if (!configSheet) {
+          configSheet = ss.insertSheet("⚙️ Employee Sheets");
+          configSheet.getRange(1, 1, 1, 6).setValues([[
+            "Employee Name", "Google Sheet ID or Full URL", "Tab Name (Default: ExecutionSheet)", "Status (Active/Paused)", "Last Pulled At", "Rows Ingested"
+          ]]);
+        }
+        var lastRow = configSheet.getLastRow();
+        var existingRow = -1;
+        if (lastRow >= 2) {
+          var existingData = configSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+          for (var r = 0; r < existingData.length; r++) {
+            if (String(existingData[r][0] || "").trim().toLowerCase() === empName.toLowerCase()) {
+              existingRow = r + 2;
+              break;
+            }
+          }
+        }
+        if (existingRow > 0) {
+          configSheet.getRange(existingRow, 1, 1, 4).setValues([[empName, cleanId, tabName, status]]);
+        } else {
+          configSheet.appendRow([empName, cleanId, tabName, status, "", 0]);
+        }
+        output = {
+          success: true,
+          message: "Employee sheet '" + empName + "' registered in Google Sheet.",
+          employee: { employee: empName, sheetId: cleanId, tabName: tabName, status: status }
+        };
+      }
+    } else if (action === "delete_employee") {
+      var empName = String(body.employee || p.employee || "").trim();
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      var configSheet = ss.getSheetByName("⚙️ Employee Sheets") || ss.getSheetByName("Employee Sheets");
+      if (configSheet && configSheet.getLastRow() >= 2) {
+        var existingData = configSheet.getRange(2, 1, configSheet.getLastRow() - 1, 1).getValues();
+        for (var r = 0; r < existingData.length; r++) {
+          if (String(existingData[r][0] || "").trim().toLowerCase() === empName.toLowerCase()) {
+            configSheet.deleteRow(r + 2);
+            break;
+          }
+        }
+      }
+      output = { success: true, message: "Employee sheet '" + empName + "' removed from Google Sheet." };
     } else if (action === "enable_realtime") {
       installRealtimeSyncTrigger(true);
       output = {

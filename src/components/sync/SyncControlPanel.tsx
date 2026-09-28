@@ -30,8 +30,10 @@ import {
   Square,
   X,
   Plus,
+  Pencil,
+  Play,
 } from "lucide-react";
-import { CampaignSummary, CreatorDeliverableBrandView, CreatorDeliverableInternal } from "@/lib/types";
+import { CampaignSummary, CreatorDeliverableBrandView, CreatorDeliverableInternal, EmployeeSheet } from "@/lib/types";
 
 interface SelectOption {
   value: string;
@@ -425,8 +427,53 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
   const [resetScope, setResetScope] = useState<"ALL" | "MONTH" | "CAMPAIGN" | "EMPLOYEE">("ALL");
   const [resetScopeValue, setResetScopeValue] = useState<string>("");
 
-  // Master Spreadsheet Link
-  const MASTER_SHEET_URL = "https://docs.google.com/spreadsheets/d/173oty1YHofleHqdOs0ltSGjIPfCIZi692GxaHbNJl6g/edit";
+  // Master Spreadsheet Link (Central 'Execution Pipeline' sheet)
+  const defaultMasterSheetUrl = (
+    process.env.NEXT_PUBLIC_MASTER_SPREADSHEET_URL ||
+    "https://docs.google.com/spreadsheets/d/173oty1YHofleHqdOs0ItSGjlPfCIZi692GxaHbNJl6g/edit"
+  ).trim();
+  const [masterSheetUrl, setMasterSheetUrl] = useState<string>(defaultMasterSheetUrl);
+  const [isMasterSheetUrlSaved, setIsMasterSheetUrlSaved] = useState<boolean>(true);
+
+  // Connected Employee Sheets Registry State
+  const [employees, setEmployees] = useState<EmployeeSheet[]>([
+    {
+      id: "emp-payal",
+      employee_name: "Payal",
+      sheet_id: "17kvysvuctOSTh_1FTEsa_vlsdVELs8rSdqR-R_gJZqI",
+      tab_name: "ExecutionSheet",
+      status: "Active",
+      rows_ingested: 183
+    },
+    {
+      id: "emp-rafi",
+      employee_name: "Rafi",
+      sheet_id: "1UKTfooXaLPID8zlu_A2Ck1T5AsGeElVLucDxGx2In7s",
+      tab_name: "ExecutionData",
+      status: "Active",
+      rows_ingested: 0
+    }
+  ]);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState<boolean>(false);
+  const [isSyncingEmployees, setIsSyncingEmployees] = useState<boolean>(false);
+  const [showAddEmployeeModal, setShowAddEmployeeModal] = useState<boolean>(false);
+  const [editingEmployee, setEditingEmployee] = useState<EmployeeSheet | null>(null);
+  const [isSavingEmployee, setIsSavingEmployee] = useState<boolean>(false);
+  const [deleteConfirmEmp, setDeleteConfirmEmp] = useState<EmployeeSheet | null>(null);
+  const [isDeletingEmployee, setIsDeletingEmployee] = useState<boolean>(false);
+  const [employeeFormData, setEmployeeFormData] = useState<{
+    employee_name: string;
+    sheet_id: string;
+    tab_name: string;
+    status: "Active" | "Paused";
+  }>({
+    employee_name: "",
+    sheet_id: "",
+    tab_name: "ExecutionSheet",
+    status: "Active"
+  });
+  const [employeeFormError, setEmployeeFormError] = useState<string | null>(null);
+  const [copiedSheetId, setCopiedSheetId] = useState<string | null>(null);
 
   const fetchSyncLogs = async () => {
     setIsLoadingLogs(true);
@@ -443,6 +490,31 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
     }
   };
 
+  const fetchEmployees = async (forceSync: boolean = false) => {
+    if (forceSync) setIsSyncingEmployees(true);
+    else setIsLoadingEmployees(true);
+    try {
+      const res = await fetch(`/api/sync/employees${forceSync ? "?sync=true" : ""}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.employees) && data.employees.length > 0) {
+        setEmployees(data.employees);
+        setSelectedEmployee((prev) => {
+          const exists = data.employees.some((e: EmployeeSheet) => e.employee_name === prev);
+          if (!exists) {
+            const firstActive = data.employees.find((e: EmployeeSheet) => e.status === "Active");
+            return firstActive ? firstActive.employee_name : data.employees[0].employee_name;
+          }
+          return prev;
+        });
+      }
+    } catch (err) {
+      console.warn("Failed to fetch employee sheets", err);
+    } finally {
+      setIsLoadingEmployees(false);
+      setIsSyncingEmployees(false);
+    }
+  };
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("xcelerate_apps_script_url");
@@ -455,6 +527,12 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
         setIsUrlSaved(true);
       }
 
+      const savedMasterUrl = localStorage.getItem("xcelerate_master_sheet_url");
+      if (savedMasterUrl) {
+        setMasterSheetUrl(savedMasterUrl);
+        setIsMasterSheetUrlSaved(true);
+      }
+
       const savedSync = localStorage.getItem("xcelerate_latest_sync_data");
       if (savedSync) {
         try {
@@ -463,11 +541,14 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
       }
     }
     fetchSyncLogs();
+    fetchEmployees();
   }, []);
 
   useEffect(() => {
     if (panelTab === "logs") {
       fetchSyncLogs();
+    } else if (panelTab === "registry") {
+      fetchEmployees();
     }
   }, [panelTab]);
 
@@ -484,10 +565,158 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
     });
   };
 
-  // ONLY Payal is currently connected (dummy names like Kanika, Aditya, Sonu, Tej removed completely)
+  const handleSaveMasterSheetUrl = (url: string) => {
+    const trimmed = url.trim();
+    setMasterSheetUrl(trimmed);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("xcelerate_master_sheet_url", trimmed);
+      setIsMasterSheetUrlSaved(Boolean(trimmed));
+    }
+    setStatusMessage({
+      success: true,
+      text: "Master Google Spreadsheet ('Execution Pipeline') URL updated and saved.",
+    });
+  };
+
+  const handleOpenAddModal = () => {
+    setEditingEmployee(null);
+    setEmployeeFormData({
+      employee_name: "",
+      sheet_id: "",
+      tab_name: "ExecutionSheet",
+      status: "Active"
+    });
+    setEmployeeFormError(null);
+    setShowAddEmployeeModal(true);
+  };
+
+  const handleOpenEditModal = (emp: EmployeeSheet) => {
+    setEditingEmployee(emp);
+    setEmployeeFormData({
+      employee_name: emp.employee_name,
+      sheet_id: emp.sheet_id,
+      tab_name: emp.tab_name || "ExecutionSheet",
+      status: emp.status || "Active"
+    });
+    setEmployeeFormError(null);
+    setShowAddEmployeeModal(true);
+  };
+
+  const handleSaveEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = employeeFormData.employee_name.trim();
+    const sheetId = employeeFormData.sheet_id.trim();
+
+    if (!name) {
+      setEmployeeFormError("Please enter an employee name.");
+      return;
+    }
+    if (!sheetId) {
+      setEmployeeFormError("Please enter a Google Sheet ID or URL.");
+      return;
+    }
+
+    setIsSavingEmployee(true);
+    setEmployeeFormError(null);
+
+    try {
+      const res = await fetch("/api/sync/employees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingEmployee?.id,
+          employee_name: name,
+          sheet_id: sheetId,
+          tab_name: employeeFormData.tab_name.trim() || "ExecutionSheet",
+          status: employeeFormData.status,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        if (Array.isArray(data.employees)) {
+          setEmployees(data.employees);
+        } else {
+          fetchEmployees();
+        }
+        setShowAddEmployeeModal(false);
+        setStatusMessage({
+          success: true,
+          text: data.message || `Employee sheet for '${name}' saved in database and Google Sheet!`,
+        });
+      } else {
+        setEmployeeFormError(data.error || "Failed to save employee sheet.");
+      }
+    } catch (err: any) {
+      setEmployeeFormError(err.message || "Network error while saving.");
+    } finally {
+      setIsSavingEmployee(false);
+    }
+  };
+
+  const handleDeleteEmployee = async (emp: EmployeeSheet) => {
+    setIsDeletingEmployee(true);
+    try {
+      const res = await fetch(`/api/sync/employees?id=${emp.id}&name=${encodeURIComponent(emp.employee_name)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (Array.isArray(data.employees)) {
+          setEmployees(data.employees);
+        } else {
+          fetchEmployees();
+        }
+        setDeleteConfirmEmp(null);
+        setStatusMessage({
+          success: true,
+          text: `Employee sheet '${emp.employee_name}' removed from database.`,
+        });
+      } else {
+        setStatusMessage({
+          success: false,
+          text: data.error || "Failed to delete employee sheet.",
+        });
+      }
+    } catch (err: any) {
+      setStatusMessage({
+        success: false,
+        text: err.message || "Network error while deleting.",
+      });
+    } finally {
+      setIsDeletingEmployee(false);
+    }
+  };
+
+  const handleToggleStatus = async (emp: EmployeeSheet) => {
+    try {
+      const res = await fetch("/api/sync/employees", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: emp.id }),
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.employees)) {
+        setEmployees(data.employees);
+      } else {
+        fetchEmployees();
+      }
+    } catch (err) {
+      console.warn("Failed to toggle status", err);
+    }
+  };
+
+  const handleCopySheetId = (id: string) => {
+    navigator.clipboard.writeText(id);
+    setCopiedSheetId(id);
+    setTimeout(() => setCopiedSheetId(null), 2000);
+  };
+
+  // Connected employee names available for sync operations
   const employeeList = useMemo(() => {
-    return ["Payal"];
-  }, []);
+    const activeNames = employees.filter((e) => e.status === "Active").map((e) => e.employee_name);
+    return activeNames.length > 0 ? activeNames : ["Payal"];
+  }, [employees]);
 
   const employeeOptions: SelectOption[] = useMemo(() => {
     return [
@@ -496,19 +725,20 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
         label: "Select Employee...",
         subtitle: undefined,
       },
-      ...employeeList.map((emp) => {
+      ...employees.map((emp) => {
         const creatorCount = deliverables.filter(
           (d) =>
-            (d as any).execution_owner === emp || (d as any).xcelerate_poc === emp
+            (d as any).execution_owner === emp.employee_name || (d as any).xcelerate_poc === emp.employee_name
         ).length;
+        const totalRows = Math.max(creatorCount, emp.rows_ingested || 0);
         return {
-          value: emp,
-          label: `👤 ${emp}`,
-          subtitle: `Connected Employee (${creatorCount || 183} deliverables)`,
+          value: emp.employee_name,
+          label: `👤 ${emp.employee_name}`,
+          subtitle: `${emp.status === "Active" ? "Active Sheet" : "Paused"} (${totalRows} deliverables • Tab: ${emp.tab_name})`,
         };
       }),
     ];
-  }, [employeeList, deliverables]);
+  }, [employees, deliverables]);
 
   // Unique employees across the database deliverables
   const allDatabaseEmployees = useMemo(() => {
@@ -927,10 +1157,10 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
 
           <div className="flex items-center space-x-2.5">
             <a
-              href={MASTER_SHEET_URL}
+              href={masterSheetUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-all border border-white/10 cursor-pointer"
+              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-all border border-white/10 cursor-pointer shadow-xs"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
               <span>Open Execution Pipeline</span>
@@ -976,8 +1206,13 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
                 : "text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5"
             }`}
           >
-            <Users className="w-3.5 h-3.5" />
+            <Users className="w-3.5 h-3.5 text-blue-400" />
             <span>Employee Sheets Registry</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+              panelTab === "registry" ? "bg-slate-200 text-slate-800" : "bg-white/10 text-white"
+            }`}>
+              {employees.length}
+            </span>
           </button>
 
           <button
@@ -1892,78 +2127,272 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
       {/* ───────────────────────────────────────────────────────────────────────────── */}
       {panelTab === "registry" && (
         <div className="space-y-5">
-          <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-200/80 space-y-3 text-xs">
-            <div className="flex items-center justify-between">
-              <div className="font-extrabold text-slate-900 flex items-center space-x-1.5">
-                <Users className="w-4 h-4 text-[#0052FF]" />
-                <span>Connected Employee Sheets Registry</span>
+          {/* Top Control Header Card */}
+          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <span className="p-1.5 rounded-xl bg-blue-100 text-[#0052FF]">
+                    <Users className="w-4 h-4" />
+                  </span>
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                    Connected Employee Sheets Registry &amp; Database
+                  </h3>
+                </div>
+                <p className="text-[11px] text-slate-500 font-medium max-w-xl leading-relaxed">
+                  Add and configure each employee&apos;s Google Sheet credentials directly into your database. Data ingested from active employee sheets flows automatically into the master &apos;Flow&apos; sheet and Turso database.
+                </p>
               </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                1 Active Sheet Connected
-              </span>
+
+              {/* Action Buttons */}
+              <div className="flex items-center space-x-2.5">
+                <button
+                  type="button"
+                  disabled={isSyncingEmployees || isLoadingEmployees}
+                  onClick={() => fetchEmployees(true)}
+                  className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+                  title="Pull latest sheets listed in Google Sheet 'Employee Sheets' tab"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingEmployees ? "animate-spin text-[#0052FF]" : "text-slate-500"}`} />
+                  <span>{isSyncingEmployees ? "Syncing..." : "Sync from Google Sheet"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenAddModal}
+                  className="px-4 py-2.5 rounded-xl bg-[#0052FF] hover:bg-blue-600 text-white font-bold text-xs transition-all flex items-center space-x-1.5 cursor-pointer shadow-sm hover:shadow"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Employee Sheet</span>
+                </button>
+              </div>
             </div>
 
-            <p className="text-slate-600 leading-relaxed font-medium">
-              Manage connected employee sheets via the <strong>&quot;⚙️ Employee Sheets&quot;</strong> tab in your master spreadsheet:
-            </p>
+            {/* Quick KPI stats pills */}
+            <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-100 text-xs">
+              <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-700">
+                <span className="w-2 h-2 rounded-full bg-[#0052FF]"></span>
+                <span>Total Employees:</span>
+                <strong className="text-slate-900 font-black">{employees.length}</strong>
+              </div>
 
-            <div className="rounded-xl overflow-hidden border border-slate-200 bg-white shadow-2xs">
-              <table className="w-full text-left text-[11px]">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
+              <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 font-semibold text-emerald-800">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Active for Ingestion:</span>
+                <strong className="text-emerald-950 font-black">
+                  {employees.filter((e) => e.status === "Active").length}
+                </strong>
+              </div>
+
+              <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-blue-50/60 border border-blue-200/80 font-semibold text-blue-800 text-[11px]">
+                <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                <span>Credentials Saved in Database</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Employee Sheets Registry Table */}
+          <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-2xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
                   <tr>
-                    <th className="py-2.5 px-3">Row</th>
-                    <th className="py-2.5 px-3">Col A: Employee Name</th>
-                    <th className="py-2.5 px-3">Col B: Sheet ID or URL</th>
-                    <th className="py-2.5 px-3">Col C: Tab Name</th>
-                    <th className="py-2.5 px-3">Col D: Status</th>
+                    <th className="py-3 px-4">Employee / Owner</th>
+                    <th className="py-3 px-4">Google Sheet ID &amp; Link</th>
+                    <th className="py-3 px-4">Execution Tab</th>
+                    <th className="py-3 px-4">Ingestion Status</th>
+                    <th className="py-3 px-4">Deliverables Synced</th>
+                    <th className="py-3 px-4">Last Pulled</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
-                  <tr className="bg-blue-50/30">
-                    <td className="py-2 px-3 font-bold text-slate-400">2</td>
-                    <td className="py-2 px-3 font-bold text-slate-800">Connected Sheet</td>
-                    <td className="py-2 px-3 font-mono text-[10px] text-slate-500">17kvysvuctOSTh_1FTEsa_vlsdVELs8rSdqR-R_gJZqI</td>
-                    <td className="py-2 px-3 text-slate-600">ExecutionSheet</td>
-                    <td className="py-2 px-3">
-                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                        Active
-                      </span>
-                    </td>
-                  </tr>
-                  <tr className="text-slate-400">
-                    <td className="py-2 px-3 font-bold">3</td>
-                    <td className="py-2 px-3 font-medium italic">&lt;Add Next Employee Name&gt;</td>
-                    <td className="py-2 px-3 font-mono text-[10px]">&lt;Paste Google Sheet ID or URL&gt;</td>
-                    <td className="py-2 px-3">ExecutionSheet</td>
-                    <td className="py-2 px-3">
-                      <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 font-bold text-[10px]">
-                        Available
-                      </span>
-                    </td>
-                  </tr>
-                  <tr className="text-slate-400">
-                    <td className="py-2 px-3 font-bold">4</td>
-                    <td className="py-2 px-3 font-medium italic">&lt;Add Next Employee Name&gt;</td>
-                    <td className="py-2 px-3 font-mono text-[10px]">&lt;Paste Google Sheet ID or URL&gt;</td>
-                    <td className="py-2 px-3">ExecutionSheet</td>
-                    <td className="py-2 px-3">
-                      <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 font-bold text-[10px]">
-                        Available
-                      </span>
-                    </td>
-                  </tr>
+                  {employees.map((emp) => {
+                    const creatorCount = deliverables.filter(
+                      (d) =>
+                        (d as any).execution_owner === emp.employee_name ||
+                        (d as any).xcelerate_poc === emp.employee_name
+                    ).length;
+                    const totalRows = Math.max(creatorCount, emp.rows_ingested || 0);
+                    const isSinglePulling = activeAction === "pull_employee" && selectedEmployee === emp.employee_name;
+
+                    return (
+                      <tr key={emp.id} className="hover:bg-slate-50/70 transition-colors">
+                        {/* Employee Name & Initial Avatar */}
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center space-x-2.5">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 text-white font-black text-xs flex items-center justify-center shadow-2xs shrink-0">
+                              {emp.employee_name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="font-extrabold text-slate-900 flex items-center space-x-1.5">
+                                <span>{emp.employee_name}</span>
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-medium font-mono">
+                                {emp.id.startsWith("emp-") ? emp.id.slice(0, 14) : "Connected POC"}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Sheet ID & Quick Link */}
+                        <td className="py-3.5 px-4 font-mono text-[11px] text-slate-600">
+                          <div className="flex items-center space-x-1.5">
+                            <span className="truncate max-w-[140px] sm:max-w-[200px]" title={emp.sheet_id}>
+                              {emp.sheet_id}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopySheetId(emp.sheet_id)}
+                              className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                              title="Copy Sheet ID"
+                            >
+                              {copiedSheetId === emp.sheet_id ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                            <a
+                              href={`https://docs.google.com/spreadsheets/d/${emp.sheet_id}/edit`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                              title="Open employee spreadsheet in new tab"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        </td>
+
+                        {/* Tab Name */}
+                        <td className="py-3.5 px-4">
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-mono text-[11px] font-bold border border-slate-200/80">
+                            {emp.tab_name || "ExecutionSheet"}
+                          </span>
+                        </td>
+
+                        {/* Status (Clickable toggle) */}
+                        <td className="py-3.5 px-4">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(emp)}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer flex items-center space-x-1.5 ${
+                              emp.status === "Active"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                                : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                            }`}
+                            title="Click to toggle Active / Paused status"
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${emp.status === "Active" ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`}></span>
+                            <span>{emp.status}</span>
+                          </button>
+                        </td>
+
+                        {/* Deliverables Count */}
+                        <td className="py-3.5 px-4 font-bold text-slate-800">
+                          <div className="flex items-center space-x-1.5">
+                            <span className="text-[#0052FF]">{totalRows}</span>
+                            <span className="text-[11px] text-slate-400 font-medium">deliverables</span>
+                          </div>
+                        </td>
+
+                        {/* Last Pulled */}
+                        <td className="py-3.5 px-4 text-[11px] text-slate-500 font-medium">
+                          {emp.last_pulled_at ? (
+                            <span title={emp.last_pulled_at}>
+                              {new Date(emp.last_pulled_at).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit"
+                              })}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 italic">Ready to pull</span>
+                          )}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end space-x-1.5">
+                            {/* Direct Pull Button */}
+                            <button
+                              type="button"
+                              disabled={activeAction !== null}
+                              onClick={() => {
+                                setSelectedEmployee(emp.employee_name);
+                                executeAction("pull_employee", { employee: emp.employee_name });
+                              }}
+                              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer ${
+                                isSinglePulling
+                                  ? "bg-indigo-600 text-white animate-pulse"
+                                  : "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60"
+                              }`}
+                              title={`Pull latest records from ${emp.employee_name}'s sheet into Master Flow`}
+                            >
+                              <Play className={`w-3 h-3 fill-current ${isSinglePulling ? "animate-spin" : ""}`} />
+                              <span>{isSinglePulling ? "Pulling..." : "Pull Sheet"}</span>
+                            </button>
+
+                            {/* Edit Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditModal(emp)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                              title="Edit sheet details"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Delete Button */}
+                            <button
+                              type="button"
+                              onClick={() => setDeleteConfirmEmp(emp)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                              title="Remove from database registry"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {employees.length === 0 && !isLoadingEmployees && (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center space-y-3">
+                        <Users className="w-8 h-8 text-slate-300 mx-auto" />
+                        <p className="text-slate-500 font-bold text-xs">No employee sheets registered yet.</p>
+                        <button
+                          type="button"
+                          onClick={handleOpenAddModal}
+                          className="px-4 py-2 rounded-xl bg-[#0052FF] text-white font-bold text-xs cursor-pointer shadow-xs inline-flex items-center space-x-1.5"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Add Your First Employee Sheet</span>
+                        </button>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
+          </div>
 
-            <div className="p-3 bg-white rounded-xl border border-blue-100 text-slate-600 space-y-1.5">
-              <p className="font-bold text-slate-900">🛡️ Configuration Guidelines:</p>
-              <ul className="list-disc pl-4 space-y-1 text-[11px]">
-                <li>Share the employee spreadsheet with Viewer or Editor access.</li>
-                <li>Ensure the sheet contains a tab named <code>ExecutionSheet</code>.</li>
-                <li>Use <strong>&quot;Pull Single Employee Sheet&quot;</strong> to ingest deliverables on demand.</li>
-              </ul>
+          {/* Configuration Guidelines Box */}
+          <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200/80 text-slate-700 space-y-2 text-xs">
+            <div className="flex items-center space-x-2 font-extrabold text-slate-900">
+              <Sparkles className="w-4 h-4 text-[#0052FF]" />
+              <span>How Employee Sheet Ingestion Works</span>
             </div>
+            <ul className="list-disc pl-5 space-y-1 text-[11px] text-slate-600 font-medium">
+              <li><strong>Share Access:</strong> Ensure each employee&apos;s spreadsheet is shared with Viewer or Editor permissions with your Google account.</li>
+              <li><strong>Tab Mapping:</strong> The tab name must match what the employee uses (e.g. <code>ExecutionSheet</code> or <code>ExecutionData</code>).</li>
+              <li><strong>Instant Pulling:</strong> Click <strong>&quot;Pull Sheet&quot;</strong> in the registry or select the employee in <strong>&quot;Pull Single Employee Sheet&quot;</strong> on the Sync Menu tab.</li>
+              <li><strong>Master Flow Synchronization:</strong> Ingested deliverables are matched by <code>Deliverable ID</code> so existing records are updated and new rows are appended cleanly without duplicate chaos.</li>
+            </ul>
           </div>
         </div>
       )}
@@ -2041,6 +2470,48 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
                   </ol>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Master Google Spreadsheet URL Configuration */}
+          <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-black text-slate-900 flex items-center space-x-1.5">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <span>Master Google Spreadsheet (&quot;Execution Pipeline&quot;)</span>
+                </h4>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  The central master Google Sheet where all employee deliverables are merged into the &apos;Flow&apos; tab.
+                </p>
+              </div>
+
+              <a
+                href={masterSheetUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold flex items-center space-x-1 hover:bg-emerald-100 transition-colors cursor-pointer"
+              >
+                <ExternalLink className="w-3 h-3 text-emerald-600" />
+                <span>Open Sheet</span>
+              </a>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                type="text"
+                value={masterSheetUrl}
+                onChange={(e) => setMasterSheetUrl(e.target.value)}
+                placeholder="https://docs.google.com/spreadsheets/d/173oty1YHofleHqdOs0ItSGjlPfCIZi692GxaHbNJl6g/edit"
+                className="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono text-slate-800 focus:outline-none focus:border-[#0052FF]"
+              />
+              <button
+                type="button"
+                onClick={() => handleSaveMasterSheetUrl(masterSheetUrl)}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer transition-all shrink-0"
+              >
+                Save URL
+              </button>
             </div>
           </div>
 
@@ -2435,6 +2906,171 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────────────────────── */}
+      {/* MODAL: ADD / EDIT EMPLOYEE SHEET */}
+      {/* ───────────────────────────────────────────────────────────────────────────── */}
+      {showAddEmployeeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <span className="p-1.5 rounded-xl bg-blue-100 text-[#0052FF]">
+                    <Users className="w-4 h-4" />
+                  </span>
+                  <h3 className="text-sm font-black text-slate-900">
+                    {editingEmployee ? `Edit Sheet: ${editingEmployee.employee_name}` : "Connect New Employee Sheet"}
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 font-medium">
+                  {editingEmployee
+                    ? "Update spreadsheet link, tab name, or status."
+                    : "Add employee sheet details to save them into the database and enable sync."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddEmployeeModal(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {employeeFormError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{employeeFormError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEmployee} className="space-y-4 text-xs font-medium">
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  Employee / POC Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={employeeFormData.employee_name}
+                  onChange={(e) => setEmployeeFormData({ ...employeeFormData, employee_name: e.target.value })}
+                  placeholder="e.g. Rafi, Payal, Kanika"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#0052FF] focus:bg-white transition-all"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  Google Sheet ID or Full URL <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={employeeFormData.sheet_id}
+                  onChange={(e) => setEmployeeFormData({ ...employeeFormData, sheet_id: e.target.value })}
+                  placeholder="e.g. 1UKTfooXaLPID8zlu... or paste full Google Sheet URL"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono text-slate-900 focus:outline-none focus:border-[#0052FF] focus:bg-white transition-all"
+                />
+                <p className="text-[10px] text-slate-400">
+                  Tip: You can paste the full browser URL (`https://docs.google.com/spreadsheets/d/.../edit`); we automatically extract the clean ID.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                    Tab Name
+                  </label>
+                  <input
+                    type="text"
+                    value={employeeFormData.tab_name}
+                    onChange={(e) => setEmployeeFormData({ ...employeeFormData, tab_name: e.target.value })}
+                    placeholder="ExecutionSheet"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono text-slate-900 focus:outline-none focus:border-[#0052FF] focus:bg-white transition-all"
+                  />
+                  <p className="text-[10px] text-slate-400">Default: ExecutionSheet</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                    Status
+                  </label>
+                  <select
+                    value={employeeFormData.status}
+                    onChange={(e) => setEmployeeFormData({ ...employeeFormData, status: e.target.value as "Active" | "Paused" })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#0052FF] cursor-pointer"
+                  >
+                    <option value="Active">Active (Ready for Sync)</option>
+                    <option value="Paused">Paused (Skip Sync)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-[11px] text-slate-500 space-y-1">
+                <span className="font-bold text-slate-700">🔒 Access Reminder:</span>
+                <p>Ensure the spreadsheet is shared with Viewer or Editor permissions with your Google account so the sync engine can read rows.</p>
+              </div>
+
+              <div className="flex items-center justify-end space-x-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddEmployeeModal(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingEmployee}
+                  className="px-5 py-2.5 rounded-xl bg-[#0052FF] hover:bg-blue-600 disabled:opacity-50 text-white font-bold text-xs cursor-pointer transition-all flex items-center space-x-1.5 shadow-sm"
+                >
+                  {isSavingEmployee && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{isSavingEmployee ? "Saving..." : editingEmployee ? "Update Employee Sheet" : "Save to Database"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────────────────────── */}
+      {/* MODAL: DELETE EMPLOYEE CONFIRMATION */}
+      {/* ───────────────────────────────────────────────────────────────────────────── */}
+      {deleteConfirmEmp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center space-x-2 text-rose-600 font-black text-sm">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <span>Remove Employee Sheet?</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed font-medium">
+              Are you sure you want to remove <strong>{deleteConfirmEmp.employee_name}</strong>&apos;s spreadsheet from the database registry?
+            </p>
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] font-mono text-slate-600 truncate">
+              Sheet ID: {deleteConfirmEmp.sheet_id}
+            </div>
+            <div className="flex items-center justify-end space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmEmp(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingEmployee}
+                onClick={() => handleDeleteEmployee(deleteConfirmEmp)}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs cursor-pointer transition-all flex items-center space-x-1.5"
+              >
+                {isDeletingEmployee && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isDeletingEmployee ? "Removing..." : "Remove Sheet"}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -212,3 +212,18 @@ export interface BrandCredential {
   created_at: string;
   updated_at: string;
 }
+
+/**
+ * Employee execution spreadsheet registration record.
+ */
+export interface EmployeeSheet {
+  id: string;
+  employee_name: string;
+  sheet_id: string;
+  tab_name: string;
+  status: "Active" | "Paused";
+  last_pulled_at?: string;
+  rows_ingested?: number;
+  created_at?: string;
+  updated_at?: string;
+}

@@ -131,6 +131,20 @@ export async function initDatabase(): Promise<void> {
     );
   `);
 
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS employee_sheets (
+      id TEXT PRIMARY KEY,
+      employee_name TEXT NOT NULL UNIQUE,
+      sheet_id TEXT NOT NULL,
+      tab_name TEXT DEFAULT 'ExecutionSheet',
+      status TEXT DEFAULT 'Active',
+      last_pulled_at DATETIME,
+      rows_ingested INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   // ── Auto-migrate employee execution & invoicing columns ──
   const employeeColumns = [
     "ALTER TABLE campaign_creators ADD COLUMN execution_owner TEXT",
@@ -204,6 +218,26 @@ export async function initDatabase(): Promise<void> {
       }
     } catch (adminErr) {
       console.error("Master admin seeding error:", adminErr);
+    }
+
+    // Ensure default connected employee sheets exist if table is empty
+    try {
+      const empRes = await db.execute("SELECT COUNT(*) as cnt FROM employee_sheets");
+      const empCount = Number(empRes.rows[0]?.cnt || 0);
+      if (empCount === 0) {
+        await db.execute({
+          sql: `INSERT INTO employee_sheets (id, employee_name, sheet_id, tab_name, status, rows_ingested)
+                VALUES (?, ?, ?, ?, ?, ?)`,
+          args: ["emp-payal", "Payal", "17kvysvuctOSTh_1FTEsa_vlsdVELs8rSdqR-R_gJZqI", "ExecutionSheet", "Active", 183]
+        });
+        await db.execute({
+          sql: `INSERT INTO employee_sheets (id, employee_name, sheet_id, tab_name, status, rows_ingested)
+                VALUES (?, ?, ?, ?, ?, ?)`,
+          args: ["emp-rafi", "Rafi", "1UKTfooXaLPID8zlu_A2Ck1T5AsGeElVLucDxGx2In7s", "ExecutionData", "Active", 0]
+        });
+      }
+    } catch (empSeedErr) {
+      console.error("Employee sheets seeding error:", empSeedErr);
     }
 
     isInitialized = true;
