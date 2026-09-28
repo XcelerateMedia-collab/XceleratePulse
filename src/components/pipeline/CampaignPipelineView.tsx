@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect, useDeferredValue } from "react";
 import { 
   Search, 
   Filter, 
@@ -268,6 +268,7 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
   }, []);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [stageFilter, setStageFilter] = useState<string>("ALL");
   const [campaignFilter, setCampaignFilter] = useState<string>("ALL");
@@ -597,6 +598,21 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
     stageFilter !== "ALL" || 
     campaignFilter !== "ALL";
 
+  const handleCategoryFilterChange = (val: string) => {
+    setCategoryFilter(val);
+    setCurrentPage(1);
+  };
+
+  const handleStageFilterChange = (val: string) => {
+    setStageFilter(val);
+    setCurrentPage(1);
+  };
+
+  const handleCampaignFilterChange = (val: string) => {
+    setCampaignFilter(val);
+    setCurrentPage(1);
+  };
+
   const handleResetFilters = () => {
     setSearchQuery("");
     setCategoryFilter("ALL");
@@ -605,9 +621,9 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
     setCurrentPage(1);
   };
 
-  // Filtered deliverables
+  // Filtered deliverables (Using deferredSearchQuery for 60fps responsive UI)
   const filtered = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
+    const q = deferredSearchQuery.toLowerCase().trim();
     return deliverables.filter((item) => {
       // 1. Text Search across creator, niche, city, spec, campaign name, brand/org
       const matchesSearch = 
@@ -691,7 +707,7 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
 
       return matchesSearch && matchesCategory && matchesCampaign && matchesStage;
     });
-  }, [deliverables, searchQuery, categoryFilter, campaignFilter, stageFilter]);
+  }, [deliverables, deferredSearchQuery, categoryFilter, campaignFilter, stageFilter]);
 
   // Sorted list for table view
   const sortedAndFiltered = useMemo(() => {
@@ -784,26 +800,26 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
     document.body.removeChild(link);
   };
 
-  // Kanban column buckets derived from FILTERED deliverables
+  // Kanban column buckets derived from FILTERED deliverables (only computed when Kanban view is active)
   const column1Items = useMemo(
-    () => filtered.filter((d) => !isItemDropped(d) && d.script_status !== "Approved" && !d.live_link),
-    [filtered]
+    () => viewMode === "kanban" ? filtered.filter((d) => !isItemDropped(d) && d.script_status !== "Approved" && !d.live_link) : [],
+    [filtered, viewMode]
   );
   const column2Items = useMemo(
-    () => filtered.filter((d) => !isItemDropped(d) && d.script_status === "Approved" && d.final_video_status !== "Approved" && !d.live_link),
-    [filtered]
+    () => viewMode === "kanban" ? filtered.filter((d) => !isItemDropped(d) && d.script_status === "Approved" && d.final_video_status !== "Approved" && !d.live_link) : [],
+    [filtered, viewMode]
   );
   const column3Items = useMemo(
-    () => filtered.filter((d) => !isItemDropped(d) && d.final_video_status === "Approved" && !d.live_link),
-    [filtered]
+    () => viewMode === "kanban" ? filtered.filter((d) => !isItemDropped(d) && d.final_video_status === "Approved" && !d.live_link) : [],
+    [filtered, viewMode]
   );
   const column4Items = useMemo(
-    () => filtered.filter((d) => !isItemDropped(d) && Boolean(d.live_link)),
-    [filtered]
+    () => viewMode === "kanban" ? filtered.filter((d) => !isItemDropped(d) && Boolean(d.live_link)) : [],
+    [filtered, viewMode]
   );
   const column5Items = useMemo(
-    () => filtered.filter((d) => isItemDropped(d)),
-    [filtered]
+    () => viewMode === "kanban" ? filtered.filter((d) => isItemDropped(d)) : [],
+    [filtered, viewMode]
   );
 
   // Status badges
@@ -1054,7 +1070,7 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
               label="All Campaigns"
               value={campaignFilter}
               options={campaignDropdownOptions}
-              onChange={setCampaignFilter}
+              onChange={handleCampaignFilterChange}
               icon={<Briefcase className="w-3.5 h-3.5 text-slate-500" />}
             />
           )}
@@ -1065,7 +1081,7 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
             label="All Statuses"
             value={stageFilter}
             options={statusDropdownOptions}
-            onChange={setStageFilter}
+            onChange={handleStageFilterChange}
             icon={<Activity className="w-3.5 h-3.5 text-slate-500" />}
           />
 
@@ -1075,7 +1091,7 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
             label="All Categories"
             value={categoryFilter}
             options={categoryDropdownOptions}
-            onChange={setCategoryFilter}
+            onChange={handleCategoryFilterChange}
             icon={<Layers className="w-3.5 h-3.5 text-slate-500" />}
           />
 
@@ -1115,8 +1131,9 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
       </div>
 
       {/* Master Table View (Cinematic Light Studio) */}
-      <div className={viewMode === "table" ? "block" : "hidden"}>
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-xs overflow-hidden">
+      {viewMode === "table" && (
+        <div className="w-full">
+          <div className="rounded-2xl bg-white border border-slate-200 shadow-xs overflow-hidden">
           {/* Mobile Swipe Guidance Banner */}
           <div className="sm:hidden px-3.5 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200/80 flex items-center justify-between text-xs text-[#0052FF] font-semibold">
             <span>👉 Swipe table sideways to view all stages</span>
@@ -1639,13 +1656,15 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
             )}
           </div>
         )}
+        </div>
       </div>
-    </div>
+    )}
 
       {/* ───────────────────────────────────────────────────────────────────────────── */}
       {/* App-Style Cards View Mode (Tailored for Mobile & Touch Devices) */}
       {/* ───────────────────────────────────────────────────────────────────────────── */}
-      <div className={viewMode === "cards" ? "block" : "hidden"}>
+      {viewMode === "cards" && (
+        <div className="w-full">
         {filtered.length === 0 ? (
           <div className="p-10 rounded-2xl bg-white border border-slate-200 text-center space-y-3 shadow-xs">
             <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#0052FF] flex items-center justify-center mx-auto">
@@ -1960,10 +1979,12 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
             )}
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       {/* Stage Progression Funnel / Kanban View */}
-      <div className={viewMode === "kanban" ? "block" : "hidden"}>
+      {viewMode === "kanban" && (
+        <div className="w-full">
         {filtered.length === 0 ? (
           <div className="p-12 rounded-2xl glass-panel-light border border-slate-200/90 text-center space-y-3">
             <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#0052FF] flex items-center justify-center mx-auto">
@@ -2453,7 +2474,8 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
           </div>
         </div>
       )}
-    </div>
+        </div>
+      )}
 
       {/* ═══════════════════════════════════════════════════════════
            CREATOR DEEP DIVE MODAL / INSPECTION DIALOG (WORLD-CLASS CLEAN UI)

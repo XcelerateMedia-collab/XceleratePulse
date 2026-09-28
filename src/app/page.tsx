@@ -205,6 +205,10 @@ export default function Home() {
     }
   }, []);
 
+  // In-memory cache for instant 0ms campaign switching
+  const allDeliverablesRef = useRef<(CreatorDeliverableBrandView | CreatorDeliverableInternal)[]>([]);
+  const campaignCacheRef = useRef<Map<string, (CreatorDeliverableBrandView | CreatorDeliverableInternal)[]>>(new Map());
+
   // Load campaigns, credentials, and deliverables with a 100% stable reference to prevent re-renders on tab switch
   const loadData = useCallback(async () => {
     if (deliverablesRef.current.length === 0) {
@@ -228,6 +232,40 @@ export default function Home() {
       setCredentials(credList);
       setDeliverables(delivRes.deliverables);
       setIsInternal(delivRes.isInternal);
+
+      // Pre-cache deliverables for instant switching
+      if (targetCampId === "ALL") {
+        allDeliverablesRef.current = delivRes.deliverables;
+        campaignCacheRef.current.set("ALL", delivRes.deliverables);
+        // Pre-index by campaign_id
+        for (let i = 0; i < delivRes.deliverables.length; i++) {
+          const d = delivRes.deliverables[i];
+          if (d.campaign_id) {
+            const arr = campaignCacheRef.current.get(d.campaign_id) || [];
+            arr.push(d);
+            campaignCacheRef.current.set(d.campaign_id, arr);
+          }
+        }
+      } else {
+        campaignCacheRef.current.set(targetCampId, delivRes.deliverables);
+        // Prefetch ALL in background so any future campaign switch is 0ms instant
+        if (allDeliverablesRef.current.length === 0) {
+          getCampaignDeliverables("ALL", roleRef.current, selectedOrgRef.current, assignedIds)
+            .then((allRes) => {
+              allDeliverablesRef.current = allRes.deliverables;
+              campaignCacheRef.current.set("ALL", allRes.deliverables);
+              for (let i = 0; i < allRes.deliverables.length; i++) {
+                const d = allRes.deliverables[i];
+                if (d.campaign_id) {
+                  const arr = campaignCacheRef.current.get(d.campaign_id) || [];
+                  arr.push(d);
+                  campaignCacheRef.current.set(d.campaign_id, arr);
+                }
+              }
+            })
+            .catch(() => {});
+        }
+      }
     } catch (err) {
       console.error("Failed to load campaign data:", err);
     } finally {
@@ -255,9 +293,34 @@ export default function Home() {
     }
   }, []);
 
-  // Switch active campaign within the organization or select ALL
+  // Switch active campaign within the organization or select ALL (Instant 0ms update + background sync)
   const handleCampaignChange = useCallback(async (campId: string) => {
     setSelectedCampaignId(campId);
+
+    // 1. INSTANT OPTIMISTIC IN-MEMORY FILTERING (0ms response)
+    if (campId === "ALL") {
+      if (allDeliverablesRef.current.length > 0) {
+        setDeliverables(allDeliverablesRef.current);
+      }
+    } else {
+      const cached = campaignCacheRef.current.get(campId);
+      if (cached && cached.length > 0) {
+        setDeliverables(cached);
+      } else if (allDeliverablesRef.current.length > 0) {
+        const targetCamp = campaigns.find(c => c.id === campId);
+        const targetName = targetCamp?.campaign_name?.trim().toLowerCase();
+        const inMemoryMatches = allDeliverablesRef.current.filter((d) => 
+          d.campaign_id === campId || 
+          (targetName && d.campaign_name && d.campaign_name.trim().toLowerCase() === targetName)
+        );
+        if (inMemoryMatches.length > 0) {
+          setDeliverables(inMemoryMatches);
+          campaignCacheRef.current.set(campId, inMemoryMatches);
+        }
+      }
+    }
+
+    // 2. BACKGROUND REVALIDATION / SERVER FETCH
     try {
       const delivRes = await getCampaignDeliverables(
         campId, 
@@ -267,10 +330,14 @@ export default function Home() {
       );
       setDeliverables(delivRes.deliverables);
       setIsInternal(delivRes.isInternal);
+      campaignCacheRef.current.set(campId, delivRes.deliverables);
+      if (campId === "ALL") {
+        allDeliverablesRef.current = delivRes.deliverables;
+      }
     } catch (err) {
       console.error("Failed to fetch deliverables for campaign:", err);
     }
-  }, [effectiveAssignedCampaignIds]);
+  }, [campaigns, effectiveAssignedCampaignIds]);
 
   useEffect(() => {
     if (viewMode === "portal") {
