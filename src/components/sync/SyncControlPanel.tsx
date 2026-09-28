@@ -32,6 +32,7 @@ import {
   Plus,
   Pencil,
   Play,
+  Loader2,
 } from "lucide-react";
 import { CampaignSummary, CreatorDeliverableBrandView, CreatorDeliverableInternal, EmployeeSheet } from "@/lib/types";
 
@@ -552,6 +553,8 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
     }
   }, [panelTab]);
 
+  const [isTestingUrl, setIsTestingUrl] = useState<boolean>(false);
+
   const handleSaveWebAppUrl = (url: string) => {
     const trimmed = url.trim();
     setWebAppUrl(trimmed);
@@ -563,6 +566,51 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
       success: true,
       text: "Google Apps Script Web App URL updated and saved locally.",
     });
+  };
+
+  const handleResetToDefaultUrl = () => {
+    setWebAppUrl(defaultWebAppUrl);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("xcelerate_apps_script_url", defaultWebAppUrl);
+      setIsUrlSaved(true);
+    }
+    setStatusMessage({
+      success: true,
+      text: "Reset to default Google Apps Script Web App URL.",
+    });
+  };
+
+  const handleTestConnection = async () => {
+    setIsTestingUrl(true);
+    setStatusMessage(null);
+    try {
+      const activeUrl = webAppUrl.trim() || defaultWebAppUrl;
+      const res = await fetch("/api/sync/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "test", webAppUrl: activeUrl }),
+      });
+      const data = await res.json();
+      if (res.ok && (data.status === "online" || data.success)) {
+        setStatusMessage({
+          success: true,
+          text: `Connection verified! Google Apps Script Web App is Online (${data.spreadsheetName || "Execution Pipeline"}).`,
+        });
+      } else {
+        setStatusMessage({
+          success: false,
+          text: data.error || `Apps Script returned HTTP ${res.status}.`,
+          details: data.raw ? JSON.stringify(data.raw) : undefined,
+        });
+      }
+    } catch (err: any) {
+      setStatusMessage({
+        success: false,
+        text: err.message || "Failed to reach Google Apps Script Web App.",
+      });
+    } finally {
+      setIsTestingUrl(false);
+    }
   };
 
   const handleSaveMasterSheetUrl = (url: string) => {
@@ -1357,6 +1405,26 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
               )}
               <div className="space-y-1">
                 <p className="font-bold text-xs text-slate-900 leading-snug">{statusMessage.text}</p>
+                {!statusMessage.success && (statusMessage.text.includes("404") || statusMessage.text.includes("Apps Script") || statusMessage.text.includes("Web App")) && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1.5">
+                    <button
+                      type="button"
+                      onClick={handleResetToDefaultUrl}
+                      className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] cursor-pointer transition-colors flex items-center space-x-1 shadow-2xs"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Reset to Verified Default URL</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPanelTab("settings")}
+                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold text-[11px] cursor-pointer transition-colors flex items-center space-x-1 shadow-2xs"
+                    >
+                      <Link2 className="w-3 h-3 text-[#0052FF]" />
+                      <span>Open Connection & Diagnostics</span>
+                    </button>
+                  </div>
+                )}
                 {statusMessage.details && (
                   <p className="text-[11px] text-slate-600 font-mono bg-white/80 p-2 rounded-lg border border-slate-200/80">
                     {statusMessage.details}
@@ -2428,7 +2496,7 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
               )}
             </div>
 
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <input
                 type="text"
                 value={webAppUrl}
@@ -2436,12 +2504,43 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
                 placeholder="https://script.google.com/macros/s/AKfycb.../exec"
                 className="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono text-slate-800 focus:outline-none focus:border-[#0052FF]"
               />
-              <button
-                onClick={() => handleSaveWebAppUrl(webAppUrl)}
-                className="px-4 py-2 rounded-xl bg-[#0052FF] hover:bg-blue-600 text-white font-bold text-xs cursor-pointer transition-all shrink-0"
-              >
-                Save URL
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleSaveWebAppUrl(webAppUrl)}
+                  className="px-3.5 py-2 rounded-xl bg-[#0052FF] hover:bg-blue-600 text-white font-bold text-xs cursor-pointer transition-all shadow-2xs"
+                >
+                  Save URL
+                </button>
+                <button
+                  type="button"
+                  disabled={isTestingUrl}
+                  onClick={handleTestConnection}
+                  className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer transition-all flex items-center space-x-1 disabled:opacity-50 shadow-2xs"
+                  title="Test if this Google Apps Script Web App responds with 200 OK"
+                >
+                  {isTestingUrl ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0052FF]" />
+                      <span>Testing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Test Connection</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetToDefaultUrl}
+                  title="Reset to default verified Apps Script URL"
+                  className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 font-bold text-xs cursor-pointer transition-all flex items-center space-x-1 shadow-2xs"
+                >
+                  <RotateCcw className="w-3 h-3 text-slate-500" />
+                  <span>Reset Default</span>
+                </button>
+              </div>
             </div>
 
             {/* Expandable Deployment Guide */}

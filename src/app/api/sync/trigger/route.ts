@@ -13,9 +13,10 @@ export async function POST(req: NextRequest) {
     }
     const { action = "test", webAppUrl, employee, month, campaign } = body;
 
-    const targetUrl = (webAppUrl && String(webAppUrl).trim().startsWith("http"))
-      ? String(webAppUrl).trim()
-      : (process.env.GOOGLE_APPS_SCRIPT_WEBAPP_URL || process.env.NEXT_PUBLIC_GOOGLE_APPS_SCRIPT_WEBAPP_URL || "").trim();
+    const clientUrl = (webAppUrl && String(webAppUrl).trim().startsWith("http")) ? String(webAppUrl).trim() : null;
+    const serverDefaultUrl = (process.env.GOOGLE_APPS_SCRIPT_WEBAPP_URL || process.env.NEXT_PUBLIC_GOOGLE_APPS_SCRIPT_WEBAPP_URL || "https://script.google.com/macros/s/AKfycbz5TbRW5dWaTrScczn6CnoqYaBtlKqvT3bYKbxT5Z8jV4NK4KG7QVI59fUa8YiKFdU1/exec").trim();
+
+    let targetUrl = clientUrl || serverDefaultUrl;
 
     if (!targetUrl) {
       return NextResponse.json({
@@ -24,29 +25,46 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    const url = new URL(targetUrl);
-    url.searchParams.set("action", action || "test");
-    if (employee) url.searchParams.set("employee", employee);
-    if (month) url.searchParams.set("month", month);
-    if (campaign) url.searchParams.set("campaign", campaign);
+    const buildUrl = (baseUrlStr: string) => {
+      const u = new URL(baseUrlStr);
+      u.searchParams.set("action", action || "test");
+      if (employee) u.searchParams.set("employee", employee);
+      if (month) u.searchParams.set("month", month);
+      if (campaign) u.searchParams.set("campaign", campaign);
+      const webhookOrigin = process.env.NEXT_PUBLIC_APP_URL 
+        || process.env.NEXT_PUBLIC_TUNNEL_URL 
+        || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "")
+        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://xcelerate-pulse.vercel.app");
+      if (webhookOrigin) {
+        u.searchParams.set("webhookUrl", `${webhookOrigin}/api/sync/sheets`);
+      }
+      return u.toString();
+    };
 
-    // Pass the active webhook URL so Google Apps Script can dynamically update its destination
-    const webhookOrigin = process.env.NEXT_PUBLIC_APP_URL 
-      || process.env.NEXT_PUBLIC_TUNNEL_URL 
-      || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "")
-      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://xcelerate-pulse.vercel.app");
-    if (webhookOrigin) {
-      url.searchParams.set("webhookUrl", `${webhookOrigin}/api/sync/sheets`);
-    }
-
-
-    const res = await fetch(url.toString(), {
+    let res = await fetch(buildUrl(targetUrl), {
       method: "GET",
       headers: { "User-Agent": "Xcelerate-Pulse-Admin" },
       cache: "no-store",
       redirect: "follow",
       signal: req.signal,
     });
+
+    // If client-provided URL returned 404 or auth error, retry with server default URL if different
+    if (!res.ok && clientUrl && serverDefaultUrl && clientUrl !== serverDefaultUrl) {
+      try {
+        const fallbackRes = await fetch(buildUrl(serverDefaultUrl), {
+          method: "GET",
+          headers: { "User-Agent": "Xcelerate-Pulse-Admin" },
+          cache: "no-store",
+          redirect: "follow",
+          signal: req.signal,
+        });
+        if (fallbackRes.ok) {
+          res = fallbackRes;
+          targetUrl = serverDefaultUrl;
+        }
+      } catch (_) {}
+    }
 
     const contentType = res.headers.get("content-type") || "";
     if (contentType.includes("application/json")) {
