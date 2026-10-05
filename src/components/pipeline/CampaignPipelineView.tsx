@@ -1593,15 +1593,41 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                             )}
                           </div>
                           <div className="text-[11px] text-slate-500 flex items-center space-x-1.5 mt-0.5 truncate">
-                            {item.org_name && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-50 text-[#0052FF] border border-blue-200/70 shrink-0">
-                                {item.org_name}
+                            {/* Brand / Agency badge (Never show "Unassigned") */}
+                            {(() => {
+                              const brandLabel = (item.org_name && item.org_name !== "Unassigned")
+                                ? item.org_name
+                                : (item.campaign_name && item.campaign_name !== "Consolidated Campaign" ? item.campaign_name : null);
+                              if (!brandLabel) return null;
+                              return (
+                                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-50 text-[#0052FF] border border-blue-200/70 shrink-0">
+                                  {brandLabel}
+                                </span>
+                              );
+                            })()}
+                            <span className="text-[#0052FF] font-semibold truncate">{item.niche}</span>
+                            {/* Brand / Agency POC badge (Client Lead) */}
+                            {item.brand_agency_poc && 
+                             item.brand_agency_poc.trim() !== "" && 
+                             item.brand_agency_poc.toUpperCase() !== "N/A" && 
+                             item.brand_agency_poc.toLowerCase() !== "unassigned" && 
+                             item.brand_agency_poc !== "Brand Manager" && (
+                              <span 
+                                className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold shrink-0 flex items-center gap-1"
+                                title={`Brand / Agency POC: ${item.brand_agency_poc}`}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                {item.brand_agency_poc}
                               </span>
                             )}
-                            <span className="text-[#0052FF] font-semibold truncate">{item.niche}</span>
-                            {isInternal && (item as CreatorDeliverableInternal).execution_owner && (
-                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 font-bold shrink-0">
-                                {(item as CreatorDeliverableInternal).execution_owner}
+                            {/* Xcelerate POC / Execution Owner badge */}
+                            {isInternal && ((item as CreatorDeliverableInternal).execution_owner || item.xcelerate_poc) && (
+                              <span 
+                                className="text-[9px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 font-bold shrink-0 flex items-center gap-1"
+                                title={`Agency Lead: ${(item as CreatorDeliverableInternal).execution_owner || item.xcelerate_poc}`}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
+                                {(item as CreatorDeliverableInternal).execution_owner || item.xcelerate_poc}
                               </span>
                             )}
                             {item.profile_url && (
@@ -2092,7 +2118,7 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
 
                   {/* Campaign & Deliverables Scope Chips */}
                   <div className="flex items-center flex-wrap gap-1.5 text-[11px]">
-                    {item.org_name && (
+                    {item.org_name && item.org_name !== "Unassigned" && (
                       <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700 font-bold text-[10px]">
                         {item.org_name}
                       </span>
@@ -2100,6 +2126,22 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                     {item.campaign_name && (
                       <span className="px-2 py-0.5 rounded-lg bg-blue-50/70 text-blue-700 font-semibold text-[10px] border border-blue-200/50">
                         {item.campaign_name}
+                      </span>
+                    )}
+                    {item.brand_agency_poc && 
+                     item.brand_agency_poc.trim() !== "" && 
+                     item.brand_agency_poc.toUpperCase() !== "N/A" && 
+                     item.brand_agency_poc.toLowerCase() !== "unassigned" && 
+                     item.brand_agency_poc !== "Brand Manager" && (
+                      <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200/60 flex items-center gap-1" title="Brand / Agency POC">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        {item.brand_agency_poc}
+                      </span>
+                    )}
+                    {isInternal && ((item as CreatorDeliverableInternal).execution_owner || item.xcelerate_poc) && (
+                      <span className="px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 font-bold text-[10px] border border-amber-200/60 flex items-center gap-1" title="Execution Lead">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                        {(item as CreatorDeliverableInternal).execution_owner || item.xcelerate_poc}
                       </span>
                     )}
                     <span className="px-2 py-0.5 rounded-lg bg-slate-50 text-slate-600 font-medium text-[10px] border border-slate-200/70">
@@ -2275,10 +2317,10 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                   <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
                     <span className="text-[11px] font-bold text-slate-500">
                       {isInternal 
-                        ? `Gross Margin: ${formatCurrency(internalItem.gross_margin || 0)}` 
+                        ? (isItemDropped(item) ? "Gross Margin: ₹0 (Dropped)" : `Gross Margin: ${formatCurrency(internalItem.gross_margin || 0)}`)
                         : isPerformanceAnalyst 
                         ? `Performance: ${formatNumber(item.total_views || 0)} Views • ${item.engagement_rate || 0}% ER`
-                        : `Budget: ${formatCurrency(item.brand_cost || 0)}`
+                        : (isItemDropped(item) ? "Budget: ₹0 (Dropped)" : `Budget: ${formatCurrency(item.brand_cost || 0)}`)
                       }
                     </span>
                     <div className="flex items-center space-x-1 text-[#0052FF] font-bold text-xs">
@@ -2461,9 +2503,9 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                       {(item.org_name || item.campaign_name) && (
                         <div className="flex items-center space-x-1 text-[9px] font-semibold mb-1 truncate">
                           <span className="px-1.5 py-0.2 rounded bg-blue-50 text-[#0052FF] border border-blue-200/60 font-bold truncate max-w-[85px]">
-                            {item.org_name || "Brand"}
+                            {(item.org_name && item.org_name !== "Unassigned") ? item.org_name : (item.campaign_name || "Brand")}
                           </span>
-                          {item.campaign_name && (
+                          {item.campaign_name && item.org_name && item.org_name !== "Unassigned" && (
                             <span className="text-slate-400 truncate max-w-[95px]" title={item.campaign_name}>
                               • {item.campaign_name}
                             </span>
@@ -2533,9 +2575,9 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                       {(item.org_name || item.campaign_name) && (
                         <div className="flex items-center space-x-1 text-[9px] font-semibold mb-1 truncate">
                           <span className="px-1.5 py-0.2 rounded bg-blue-50 text-[#0052FF] border border-blue-200/60 font-bold truncate max-w-[85px]">
-                            {item.org_name || "Brand"}
+                            {(item.org_name && item.org_name !== "Unassigned") ? item.org_name : (item.campaign_name || "Brand")}
                           </span>
-                          {item.campaign_name && (
+                          {item.campaign_name && item.org_name && item.org_name !== "Unassigned" && (
                             <span className="text-slate-400 truncate max-w-[95px]" title={item.campaign_name}>
                               • {item.campaign_name}
                             </span>
@@ -2601,9 +2643,9 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                       {(item.org_name || item.campaign_name) && (
                         <div className="flex items-center space-x-1 text-[9px] font-semibold mb-1 truncate">
                           <span className="px-1.5 py-0.2 rounded bg-blue-50 text-[#0052FF] border border-blue-200/60 font-bold truncate max-w-[85px]">
-                            {item.org_name || "Brand"}
+                            {(item.org_name && item.org_name !== "Unassigned") ? item.org_name : (item.campaign_name || "Brand")}
                           </span>
-                          {item.campaign_name && (
+                          {item.campaign_name && item.org_name && item.org_name !== "Unassigned" && (
                             <span className="text-slate-400 truncate max-w-[95px]" title={item.campaign_name}>
                               • {item.campaign_name}
                             </span>
@@ -2654,9 +2696,9 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                       {(item.org_name || item.campaign_name) && (
                         <div className="flex items-center space-x-1 text-[9px] font-semibold mb-1 truncate">
                           <span className="px-1.5 py-0.2 rounded bg-blue-50 text-[#0052FF] border border-blue-200/60 font-bold truncate max-w-[85px]">
-                            {item.org_name || "Brand"}
+                            {(item.org_name && item.org_name !== "Unassigned") ? item.org_name : (item.campaign_name || "Brand")}
                           </span>
-                          {item.campaign_name && (
+                          {item.campaign_name && item.org_name && item.org_name !== "Unassigned" && (
                             <span className="text-slate-400 truncate max-w-[95px]" title={item.campaign_name}>
                               • {item.campaign_name}
                             </span>
@@ -2793,9 +2835,9 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                         {(item.org_name || item.campaign_name) && (
                           <div className="flex items-center space-x-1 text-[9px] font-semibold mb-1 truncate">
                             <span className="px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200/60 font-bold truncate max-w-[85px]">
-                              {item.org_name || "Brand"}
+                              {(item.org_name && item.org_name !== "Unassigned") ? item.org_name : (item.campaign_name || "Brand")}
                             </span>
-                            {item.campaign_name && (
+                            {item.campaign_name && item.org_name && item.org_name !== "Unassigned" && (
                               <span className="text-slate-500 truncate max-w-[95px]" title={item.campaign_name}>
                                 • {item.campaign_name}
                               </span>
@@ -2877,7 +2919,11 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                   <div className="flex items-center gap-1.5 flex-wrap text-xs">
                     <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-lg bg-blue-50 text-[#0052FF] text-[11px] font-bold border border-blue-200/80">
                       <Building2 className="w-3 h-3 shrink-0" />
-                      <span className="truncate max-w-[130px]">{selectedCreator.org_name || "Brand Partner"}</span>
+                      <span className="truncate max-w-[130px]">
+                        {(selectedCreator.org_name && selectedCreator.org_name !== "Unassigned")
+                          ? selectedCreator.org_name
+                          : (selectedCreator.campaign_name || "Brand Partner")}
+                      </span>
                       {selectedCreator.client_type && (
                         <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 uppercase ml-0.5 font-bold">
                           {selectedCreator.client_type}
@@ -3044,7 +3090,9 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                       <span>Brand / Agency Partner</span>
                     </div>
                     <div className="font-extrabold text-slate-900 mt-1">
-                      {selectedCreator.org_name || "Direct Client"}
+                      {(selectedCreator.org_name && selectedCreator.org_name !== "Unassigned") 
+                        ? selectedCreator.org_name 
+                        : (selectedCreator.campaign_name || "Direct Client")}
                     </div>
                   </div>
 
@@ -3062,6 +3110,40 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                       )}
                     </div>
                   </div>
+
+                  {selectedCreator.brand_agency_poc && 
+                   selectedCreator.brand_agency_poc.trim() !== "" && 
+                   selectedCreator.brand_agency_poc.toUpperCase() !== "N/A" && 
+                   selectedCreator.brand_agency_poc.toLowerCase() !== "unassigned" && 
+                   selectedCreator.brand_agency_poc !== "Brand Manager" && (
+                    <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-200/70">
+                      <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider flex items-center space-x-1">
+                        <Users className="w-3 h-3 text-emerald-600" />
+                        <span>Brand / Agency POC</span>
+                      </div>
+                      <div className="font-extrabold text-emerald-900 mt-1 flex items-center space-x-1.5">
+                        <span>{selectedCreator.brand_agency_poc}</span>
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold uppercase">
+                          Client Lead
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {(((selectedCreator as any).execution_owner) || selectedCreator.xcelerate_poc) && (
+                    <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-200/70">
+                      <div className="text-[10px] font-bold text-amber-600 uppercase tracking-wider flex items-center space-x-1">
+                        <UserCheck className="w-3 h-3 text-amber-600" />
+                        <span>Xcelerate Execution Lead</span>
+                      </div>
+                      <div className="font-extrabold text-amber-900 mt-1 flex items-center space-x-1.5">
+                        <span>{(selectedCreator as any).execution_owner || selectedCreator.xcelerate_poc}</span>
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-bold uppercase">
+                          Agency Lead
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Milestone Approval Dates Strip */}
@@ -3413,13 +3495,21 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                     <div className="p-2.5 bg-white rounded-xl border border-blue-200/60 shadow-2xs">
                       <span className="text-slate-500 font-semibold text-[10px] uppercase">Creator Cost:</span>
                       <p className="text-sm font-extrabold text-slate-900 mt-0.5">
-                        {formatCurrency((selectedCreator as CreatorDeliverableInternal).creator_cost || 0)}
+                        {isItemDropped(selectedCreator) ? (
+                          <span className="text-slate-400 line-through">₹0 (Dropped)</span>
+                        ) : (
+                          formatCurrency((selectedCreator as CreatorDeliverableInternal).creator_cost || 0)
+                        )}
                       </p>
                     </div>
                     <div className="p-2.5 bg-white rounded-xl border border-blue-200/60 shadow-2xs">
                       <span className="text-slate-500 font-semibold text-[10px] uppercase">Gross Margin:</span>
                       <p className="text-sm font-extrabold text-[#0052FF] mt-0.5">
-                        {formatCurrency((selectedCreator as CreatorDeliverableInternal).gross_margin || 0)}
+                        {isItemDropped(selectedCreator) ? (
+                          <span className="text-slate-400 line-through">₹0 (Dropped)</span>
+                        ) : (
+                          formatCurrency((selectedCreator as CreatorDeliverableInternal).gross_margin || 0)
+                        )}
                       </p>
                     </div>
                     <div className="p-2.5 bg-white rounded-xl border border-blue-200/60 shadow-2xs">

@@ -26,10 +26,10 @@ export async function getCampaigns(
     SELECT 
       c.id, c.campaign_month, c.client_type, c.org_name, c.campaign_name,
       c.xcelerate_poc, c.brand_agency_poc, c.brand_payment_cycle, c.status, c.created_at,
-      COUNT(d.id) as deliverables_count,
-      SUM(COALESCE(d.total_views, 0)) as total_views,
-      SUM(COALESCE(d.account_reach, 0)) as total_reach,
-      AVG(COALESCE(d.engagement_rate, 0)) as avg_er,
+      COUNT(CASE WHEN LOWER(TRIM(COALESCE(d.execution_status, ''))) NOT IN ('drop', 'dropped', 'cancelled', 'cancel') THEN d.id END) as deliverables_count,
+      SUM(CASE WHEN LOWER(TRIM(COALESCE(d.execution_status, ''))) NOT IN ('drop', 'dropped', 'cancelled', 'cancel') THEN COALESCE(d.total_views, 0) ELSE 0 END) as total_views,
+      SUM(CASE WHEN LOWER(TRIM(COALESCE(d.execution_status, ''))) NOT IN ('drop', 'dropped', 'cancelled', 'cancel') THEN COALESCE(d.account_reach, 0) ELSE 0 END) as total_reach,
+      AVG(CASE WHEN LOWER(TRIM(COALESCE(d.execution_status, ''))) NOT IN ('drop', 'dropped', 'cancelled', 'cancel') THEN COALESCE(d.engagement_rate, 0) END) as avg_er,
       GROUP_CONCAT(DISTINCT d.execution_owner) as execution_owners
     FROM campaigns c
     LEFT JOIN campaign_creators d ON c.id = d.campaign_id
@@ -68,7 +68,9 @@ export async function getCampaigns(
     id: String(row.id),
     campaign_month: String(row.campaign_month),
     client_type: String(row.client_type) as any,
-    org_name: String(row.org_name),
+    org_name: (row.org_name && String(row.org_name).trim() !== "Unassigned" && String(row.org_name).trim() !== "")
+      ? String(row.org_name).trim()
+      : (row.campaign_name ? String(row.campaign_name).trim() : "Direct Brand"),
     campaign_name: String(row.campaign_name),
     xcelerate_poc: String(row.xcelerate_poc || "Team Xcelerate"),
     brand_agency_poc: row.brand_agency_poc && String(row.brand_agency_poc).trim() && String(row.brand_agency_poc).trim() !== "Brand Manager" ? String(row.brand_agency_poc).trim() : "N/A",
@@ -99,11 +101,15 @@ function cleanDateOnly(val: any): string {
 }
 
 function mapRowToDeliverable(r: any): CreatorDeliverableInternal {
+  const resolvedOrgName = (r.org_name && String(r.org_name).trim() !== "Unassigned" && String(r.org_name).trim() !== "")
+    ? String(r.org_name).trim()
+    : (r.campaign_name ? String(r.campaign_name).trim() : undefined);
+
   return {
     id: String(r.id),
     campaign_id: String(r.campaign_id),
     campaign_name: r.campaign_name ? String(r.campaign_name) : undefined,
-    org_name: r.org_name ? String(r.org_name) : undefined,
+    org_name: resolvedOrgName,
     client_type: r.client_type ? String(r.client_type) : undefined,
     campaign_month: r.campaign_month ? String(r.campaign_month) : undefined,
     creator_name: String(r.creator_name),
@@ -366,10 +372,10 @@ export async function getAgencyFinancialSummary() {
   const stats = await db.execute(`
     SELECT 
       COUNT(DISTINCT c.id) as total_campaigns,
-      COUNT(d.id) as total_creators,
-      SUM(COALESCE(d.brand_cost, 0)) as total_brand_revenue,
-      SUM(COALESCE(d.creator_cost, 0)) as total_creator_payout,
-      SUM(COALESCE(d.gross_margin, 0)) as total_gross_margin
+      COUNT(CASE WHEN LOWER(TRIM(COALESCE(d.execution_status, ''))) NOT IN ('drop', 'dropped', 'cancelled', 'cancel') THEN d.id END) as total_creators,
+      SUM(CASE WHEN LOWER(TRIM(COALESCE(d.execution_status, ''))) NOT IN ('drop', 'dropped', 'cancelled', 'cancel') THEN COALESCE(d.brand_cost, 0) ELSE 0 END) as total_brand_revenue,
+      SUM(CASE WHEN LOWER(TRIM(COALESCE(d.execution_status, ''))) NOT IN ('drop', 'dropped', 'cancelled', 'cancel') THEN COALESCE(d.creator_cost, 0) ELSE 0 END) as total_creator_payout,
+      SUM(CASE WHEN LOWER(TRIM(COALESCE(d.execution_status, ''))) NOT IN ('drop', 'dropped', 'cancelled', 'cancel') THEN COALESCE(d.gross_margin, 0) ELSE 0 END) as total_gross_margin
     FROM campaigns c
     LEFT JOIN campaign_creators d ON c.id = d.campaign_id
   `);
@@ -428,9 +434,16 @@ export async function updateDeliverableWithAutomation(
     }
   }
 
-  // 2. Auto Commercials & Margin
-  const { grossMargin } = computeCommercialAutomations(Number(merged.brand_cost || 0), Number(merged.creator_cost || 0), merged.gross_margin ? Number(merged.gross_margin) : undefined);
-  merged.gross_margin = grossMargin;
+  // 2. Auto Commercials & Margin (Drop creators strictly have 0 revenue, cost & profit)
+  const isDrop = String(merged.execution_status || "").trim().toLowerCase() === "drop";
+  if (isDrop) {
+    merged.brand_cost = 0;
+    merged.creator_cost = 0;
+    merged.gross_margin = 0;
+  } else {
+    const { grossMargin } = computeCommercialAutomations(Number(merged.brand_cost || 0), Number(merged.creator_cost || 0), merged.gross_margin ? Number(merged.gross_margin) : undefined);
+    merged.gross_margin = grossMargin;
+  }
 
   // 3. Auto Engagement
   const { computedEr } = computeEngagementAutomations(

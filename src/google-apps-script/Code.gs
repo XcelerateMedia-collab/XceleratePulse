@@ -67,6 +67,7 @@ function onOpen() {
     .addItem("📥 Pull Employee Data into Flow", "pullAllEmployeeSheetsIntoFlow")
     .addItem("🚀 Sync Flow Sheet to Database", "syncFlowSheetToPlatform")
     .addSeparator()
+    .addItem("🔧 Fix Duplicate Deliverable IDs", "fixDuplicateFlowSheetIds")
     .addItem("🔍 Audit Sheet Rows (Find 4 Skipped Rows)", "auditFlowSheetRows")
     .addItem("🧹 Clear 'Brand/Agency Name' (For Manual Input)", "clearAutoFilledBrandNamesInFlow")
     .addItem("📋 Employee Sheets Registry", "setupEmployeeSheetsRegistryTab");
@@ -87,11 +88,45 @@ function onOpen() {
 }
 
 /**
- * Installable Trigger: Runs with full user auth so UrlFetchApp can send HTTP requests in real-time
+ * Batch write lock: prevents onEdit triggers from firing during pullEmployeeListIntoFlow
+ * so that data written from employee sheets into Flow does NOT get auto-pushed to Turso.
+ */
+var BATCH_WRITE_LOCK_KEY = "XCELERATE_BATCH_WRITE_LOCK";
+
+function isBatchWriteInProgress() {
+  try {
+    var lock = PropertiesService.getScriptProperties().getProperty(BATCH_WRITE_LOCK_KEY);
+    if (!lock) return false;
+    // Lock expires after 10 minutes to prevent permanent deadlock
+    var lockTime = parseInt(lock, 10);
+    if (isNaN(lockTime)) return false;
+    return (new Date().getTime() - lockTime) < 600000;
+  } catch (e) {
+    return false;
+  }
+}
+
+function setBatchWriteLock(active) {
+  try {
+    if (active) {
+      PropertiesService.getScriptProperties().setProperty(BATCH_WRITE_LOCK_KEY, String(new Date().getTime()));
+    } else {
+      PropertiesService.getScriptProperties().deleteProperty(BATCH_WRITE_LOCK_KEY);
+    }
+  } catch (e) {
+    Logger.log("Lock error: " + e.toString());
+  }
+}
+
+/**
+ * Installable Trigger: Runs with full user auth so UrlFetchApp can send HTTP requests in real-time.
+ * GUARDED: Skips if a batch-write is in progress (employee pull into Flow).
  */
 function handleInstalledOnEdit(e) {
   try {
     if (!e || !e.range) return;
+    // CRITICAL: Skip if employee data is being batch-written into Flow
+    if (isBatchWriteInProgress()) return;
     var sheet = e.range.getSheet();
     if (sheet.getName() !== TARGET_FLOW_TAB) return;
     var row = e.range.getRow();
@@ -105,11 +140,14 @@ function handleInstalledOnEdit(e) {
 }
 
 /**
- * Fallback simple trigger (Catches manual cell edits in Flow)
+ * Fallback simple trigger (Catches manual cell edits in Flow).
+ * GUARDED: Skips if a batch-write is in progress (employee pull into Flow).
  */
 function onEdit(e) {
   try {
     if (!e || !e.range) return;
+    // CRITICAL: Skip if employee data is being batch-written into Flow
+    if (isBatchWriteInProgress()) return;
     var sheet = e.range.getSheet();
     if (sheet.getName() !== TARGET_FLOW_TAB) return;
     var row = e.range.getRow();
@@ -840,6 +878,7 @@ function pullEmployeeListIntoFlow(employeeList, scopeLabel) {
   var newCreatorsMap = {};
   var updatedCreatorsMap = {};
   var pullErrors = [];
+  var usedNewDeliverableIds = {};
   var configSheet = ss.getSheetByName("⚙️ Employee Sheets");
   var nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Kolkata", "yyyy-MM-dd HH:mm:ss");
 
@@ -1009,10 +1048,12 @@ function pullEmployeeListIntoFlow(employeeList, scopeLabel) {
         var deliverableId = "";
         if (existingRowIdx !== undefined && idCol && flowData[existingRowIdx][idCol - 1]) {
           deliverableId = String(flowData[existingRowIdx][idCol - 1]).trim();
-        } else if (rowUniqueId && rowUniqueId !== "#ERROR!") {
+        } else if (rowUniqueId && rowUniqueId !== "#ERROR!" && (!flowById[rowUniqueId] || flowById[rowUniqueId].length === 0) && !usedNewDeliverableIds[rowUniqueId]) {
           deliverableId = rowUniqueId;
+          usedNewDeliverableIds[rowUniqueId] = true;
         } else {
           deliverableId = Utilities.getUuid();
+          usedNewDeliverableIds[deliverableId] = true;
         }
 
         // If existing row, preserve existing row values first so columns like Views, Likes, manual Brand/Agency Name aren't erased
@@ -1140,22 +1181,32 @@ function pullEmployeeListIntoFlow(employeeList, scopeLabel) {
   }
 
   // 3. Write ALL updated & appended rows to Flow in ONE single batch write!
-  if (flowData.length > 0) {
-    var requiredMaxRows = flowData.length + 1; // +1 for header row
-    var currentMaxRows = flowSheet.getMaxRows();
-    if (requiredMaxRows > currentMaxRows) {
-      flowSheet.insertRowsAfter(currentMaxRows, (requiredMaxRows - currentMaxRows) + 30);
+  // CRITICAL: Acquire batch write lock BEFORE writing so onEdit triggers are suppressed
+  setBatchWriteLock(true);
+  try {
+    if (flowData.length > 0) {
+      var requiredMaxRows = flowData.length + 1; // +1 for header row
+      var currentMaxRows = flowSheet.getMaxRows();
+      if (requiredMaxRows > currentMaxRows) {
+        flowSheet.insertRowsAfter(currentMaxRows, (requiredMaxRows - currentMaxRows) + 30);
+      }
+
+      try { ss.toast("Step 3/3: Batch-writing " + flowData.length + " rows to Flow tab...", "⚡ Xcelerate Pulse", 3); } catch (_) {}
+      safeSetRange(flowSheet.getRange(2, 1, flowData.length, flowLastCol), flowData);
     }
 
-    try { ss.toast("Step 3/4: Batch-writing " + flowData.length + " rows to Flow tab...", "⚡ Xcelerate Pulse", 3); } catch (_) {}
-    safeSetRange(flowSheet.getRange(2, 1, flowData.length, flowLastCol), flowData);
+    SpreadsheetApp.flush();
+  } finally {
+    // ALWAYS release batch write lock, even if write fails
+    setBatchWriteLock(false);
   }
 
-  SpreadsheetApp.flush();
-
-  // 4. Automatically push the refreshed Flow sheet to database
-  try { ss.toast("Step 4/4: Pushing live to database... (90%)", "⚡ Xcelerate Pulse", 4); } catch (_) {}
-  syncFlowSheetToPlatform(true);
+  // NOTE: We intentionally do NOT auto-push to database here.
+  // The database sync is handled separately by the platform when triggered by the admin.
+  // This prevents the triple-write problem (pull → auto-sync → webhook) that was causing:
+  //   1. Extremely slow sync times (3+ minutes for 423 records)
+  //   2. Wrong "0 new creators" count (because re-syncing ALL rows overwrote the stats)
+  //   3. Unwanted Turso writes during employee data fetch
 
   if (pullErrors.length > 0) {
     Logger.log("Notice While Pulling Employee Sheets: " + pullErrors.join("; "));
@@ -1172,7 +1223,7 @@ function pullEmployeeListIntoFlow(employeeList, scopeLabel) {
     newCreatorsSummary = "\n✓ All " + totalUpdated + " records updated in-place (No new creators added).";
   }
 
-  var summaryMsg = "✅ Flow Sheet Updated & Synced to Database!\n\n" +
+  var summaryMsg = "✅ Flow Sheet Updated!\n\n" +
     "• Rows Updated: " + totalUpdated + "\n" +
     "• New Rows / Creators Added: " + totalAppended + "\n" +
     "• Total Deliverables Processed: " + (totalUpdated + totalAppended) + "\n" +
@@ -1244,7 +1295,7 @@ function syncFlowSheetByCampaign() {
 /**
  * Core filtered push to platform
  */
-function syncFlowSheetWithFilter(filterFn, scopeLabel, isSilent) {
+function syncFlowSheetWithFilter(filterFn, scopeLabel, isSilent, skipWebhook) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var flowSheet = ss.getSheetByName(TARGET_FLOW_TAB);
   if (!flowSheet) return;
@@ -1255,12 +1306,6 @@ function syncFlowSheetWithFilter(filterFn, scopeLabel, isSilent) {
 
   var range = flowSheet.getRange(1, 1, lastRow, lastCol);
   var values = range.getValues();
-  var formulas = [];
-  try { formulas = range.getFormulas(); } catch (_) {}
-  var richText = null;
-  try { richText = range.getRichTextValues(); } catch (rtErr) {
-    Logger.log("getRichTextValues bypassed to prevent V8 internal error: " + rtErr);
-  }
   var headers = values[0];
 
   var linkCols = {};
@@ -1271,6 +1316,7 @@ function syncFlowSheetWithFilter(filterFn, scopeLabel, isSilent) {
 
   var rows = [];
   var skippedDetails = [];
+  var seenDelivIds = {};
   for (var r = 1; r < values.length; r++) {
     var rowObj = {};
     var hasContent = false;
@@ -1297,9 +1343,7 @@ function syncFlowSheetWithFilter(filterFn, scopeLabel, isSilent) {
       }
 
       if (linkCols[c]) {
-        var rtCell = (richText && richText[r]) ? richText[r][c] : null;
-        var fCell = (formulas && formulas[r]) ? formulas[r][c] : "";
-        cellVal = resolveHyperlink(cellVal, rtCell, fCell);
+        cellVal = String(cellVal || "").trim();
       } else {
         cellVal = formatDateOnlyForSync(cellVal);
       }
@@ -1340,6 +1384,12 @@ function syncFlowSheetWithFilter(filterFn, scopeLabel, isSilent) {
     if (!delivId) {
       delivId = cmpId + "_" + cName.toLowerCase().replace(/[^a-z0-9]/g, "") + "_d" + sheetRowNum;
       rowObj["Deliverable ID"] = delivId;
+    } else if (seenDelivIds[delivId]) {
+      // Disambiguate duplicate ID in sheet
+      delivId = delivId + "_r" + sheetRowNum;
+      rowObj["Deliverable ID"] = delivId;
+    } else {
+      seenDelivIds[delivId] = true;
     }
 
     if (filterFn && !filterFn(rowObj)) {
@@ -1356,6 +1406,18 @@ function syncFlowSheetWithFilter(filterFn, scopeLabel, isSilent) {
       Logger.log("No rows matched filter: " + (scopeLabel || "All"));
     }
     return { success: true, totalProcessed: 0, rowsCount: 0, rows: [], skippedDetails: skippedDetails };
+  }
+
+  // If read-only mode, return extracted rows directly WITHOUT sending HTTP webhook or modifying Turso
+  if (skipWebhook) {
+    return {
+      success: true,
+      totalProcessed: rows.length,
+      rowsCount: rows.length,
+      rows: rows,
+      webhookDelivered: false,
+      skippedDetails: skippedDetails
+    };
   }
 
   var chunkSize = 500;
@@ -1668,13 +1730,15 @@ function handleRemoteApiRequest(e) {
       var nList = (pullRes && pullRes.newCreators) ? pullRes.newCreators : [];
       var uList = (pullRes && pullRes.updatedCreators) ? pullRes.updatedCreators : [];
 
-      var customMsg = "Pulled all employee sheets: " + uCount + " rows updated, " + aCount + " new rows added.";
+      var customMsg = "Pulled all employee sheets into Flow: " + uCount + " rows updated, " + aCount + " new rows added.";
       if (nList.length > 0) {
-        customMsg += " (" + nList.length + " new creators added)";
+        customMsg += " (" + nList.length + " new creators: " + nList.slice(0, 5).join(", ") + (nList.length > 5 ? "..." : "") + ")";
       }
 
-      // Also extract and return all Flow sheet rows so the platform database is updated immediately
-      var allFlowRes = syncFlowSheetWithFilter(null, "Pull All Sync", true);
+      // DO NOT re-sync entire Flow sheet to DB here! That was the root cause of:
+      //  1. Slow sync (triple write: pull → sync flow → webhook)
+      //  2. Wrong "0 new creators" (all IDs already existed from auto-sync)
+      // The admin can separately trigger "Sync to Database" when ready.
 
       output = {
         success: pullRes ? pullRes.success !== false : true,
@@ -1684,7 +1748,6 @@ function handleRemoteApiRequest(e) {
         totalProcessed: pCount,
         newCreators: nList,
         updatedCreators: uList,
-        rows: allFlowRes ? (allFlowRes.rows || []) : [],
         message: customMsg
       };
     } else if (action === "pull_employee") {
@@ -1707,13 +1770,13 @@ function handleRemoteApiRequest(e) {
         var nList = (pullSingleRes && pullSingleRes.newCreators) ? pullSingleRes.newCreators : [];
         var uList = (pullSingleRes && pullSingleRes.updatedCreators) ? pullSingleRes.updatedCreators : [];
 
-        var customMsg = "Pulled employee '" + targetEmp.employee + "': " + uCount + " rows updated, " + aCount + " new rows added.";
+        var customMsg = "Pulled employee '" + targetEmp.employee + "' into Flow: " + uCount + " rows updated, " + aCount + " new rows added.";
         if (nList.length > 0) {
-          customMsg += " (" + nList.length + " new creators added)";
+          customMsg += " (" + nList.length + " new creators: " + nList.slice(0, 5).join(", ") + (nList.length > 5 ? "..." : "") + ")";
         }
 
-        // Also extract and return all Flow sheet rows so the platform database is updated immediately
-        var allFlowRes = syncFlowSheetWithFilter(null, "Pull Single Sync", true);
+        // DO NOT re-sync entire Flow sheet to DB here!
+        // Only pull into Flow sheet. Database sync is a separate explicit action.
 
         output = {
           success: pullSingleRes ? pullSingleRes.success !== false : true,
@@ -1724,7 +1787,6 @@ function handleRemoteApiRequest(e) {
           totalProcessed: pCount,
           newCreators: nList,
           updatedCreators: uList,
-          rows: allFlowRes ? (allFlowRes.rows || []) : [],
           message: customMsg
         };
       }
@@ -1741,11 +1803,13 @@ function handleRemoteApiRequest(e) {
         webhookDelivered: syncRes ? syncRes.webhookDelivered : false,
         message: "Extracted and synchronized " + recCount + " deliverables from Flow sheet."
       };
-    } else if (action === "get_flow_rows" || action === "read_flow") {
-      var syncRes = syncFlowSheetWithFilter(null, "Read Flow", true);
+    } else if (action === "fix_duplicate_ids" || action === "deduplicate_ids") {
+      output = fixDuplicateFlowSheetIds();
+    } else if (action === "get_flow_rows" || action === "read_flow" || action === "compare_flow") {
+      var syncRes = syncFlowSheetWithFilter(null, "Read Flow", true, true);
       output = {
         success: true,
-        action: "get_flow_rows",
+        action: action,
         totalProcessed: syncRes ? syncRes.totalProcessed : 0,
         rows: syncRes ? (syncRes.rows || []) : []
       };
@@ -1999,3 +2063,80 @@ function auditFlowSheetRows() {
 
   ui.alert("Audit Results", msg, ui.ButtonSet.OK);
 }
+
+/**
+ * Scans Flow tab Column A (Deliverable ID) and replaces duplicate UUIDs with fresh unique UUIDs.
+ * Ensures every single creator deliverable row has a strictly unique primary key.
+ */
+function fixDuplicateFlowSheetIds() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var flowSheet = ss.getSheetByName(TARGET_FLOW_TAB);
+  if (!flowSheet) return { success: false, error: "Tab '" + TARGET_FLOW_TAB + "' not found." };
+
+  var lastRow = flowSheet.getLastRow();
+  var lastCol = flowSheet.getLastColumn();
+  if (lastRow < 2) return { success: true, fixedCount: 0, message: "Flow sheet has no data rows." };
+
+  var headers = flowSheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var idCol = -1;
+  for (var c = 0; c < headers.length; c++) {
+    var h = String(headers[c] || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (h === "deliverableid" || h === "id" || h === "uniqueid") {
+      idCol = c + 1;
+      break;
+    }
+  }
+  if (idCol === -1) idCol = 1;
+
+  var idRange = flowSheet.getRange(2, idCol, lastRow - 1, 1);
+  var idValues = idRange.getValues();
+  var seenIds = {};
+  var fixedRows = [];
+
+  for (var r = 0; r < idValues.length; r++) {
+    var curId = String(idValues[r][0] || "").trim();
+    var sheetRowNum = r + 2;
+    if (curId) {
+      if (seenIds[curId]) {
+        var newUuid = Utilities.getUuid();
+        idValues[r][0] = newUuid;
+        fixedRows.push({
+          row: sheetRowNum,
+          oldId: curId,
+          newId: newUuid,
+          previousRow: seenIds[curId]
+        });
+      } else {
+        seenIds[curId] = sheetRowNum;
+      }
+    }
+  }
+
+  if (fixedRows.length > 0) {
+    idRange.setValues(idValues);
+    Logger.log("✅ Fixed " + fixedRows.length + " duplicate Deliverable IDs in Flow sheet.");
+  }
+
+  var msg = "Fixed " + fixedRows.length + " duplicate Deliverable IDs in Flow sheet.";
+  try {
+    var ui = SpreadsheetApp.getUi();
+    if (ui) {
+      if (fixedRows.length > 0) {
+        var details = fixedRows.map(function(f) {
+          return "Row " + f.row + " (duplicated Row " + f.previousRow + ") -> " + f.newId;
+        }).join("\n");
+        ui.alert("🔧 Duplicate IDs Repaired", msg + "\n\n" + details, ui.ButtonSet.OK);
+      } else {
+        ui.alert("✅ All IDs Unique", "No duplicate Deliverable IDs found in Flow sheet!", ui.ButtonSet.OK);
+      }
+    }
+  } catch (_) {}
+
+  return {
+    success: true,
+    fixedCount: fixedRows.length,
+    fixedRows: fixedRows,
+    message: msg
+  };
+}
+

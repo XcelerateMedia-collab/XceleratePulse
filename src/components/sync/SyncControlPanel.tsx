@@ -33,8 +33,10 @@ import {
   Pencil,
   Play,
   Loader2,
+  ArrowDownUp,
 } from "lucide-react";
 import { CampaignSummary, CreatorDeliverableBrandView, CreatorDeliverableInternal, EmployeeSheet } from "@/lib/types";
+import { SheetDbCompareView } from "./SheetDbCompareView";
 
 interface SelectOption {
   value: string;
@@ -315,7 +317,7 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
         if (safeProgress < 25) setSyncStage("Connecting to Google Sheets Web App...");
         else if (safeProgress < 55) setSyncStage("Reading & extracting employee sheet records...");
         else if (safeProgress < 80) setSyncStage("Mapping Brief Name directly to Campaign Name in Flow...");
-        else setSyncStage("Batch-writing rows & pushing live to database...");
+        else setSyncStage("Batch-writing rows into Master Flow sheet...");
       } else if (actionName.includes("sync")) {
         if (safeProgress < 30) setSyncStage("Reading Flow sheet deliverables...");
         else if (safeProgress < 70) setSyncStage("Packaging records & verifying creator data...");
@@ -398,7 +400,7 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
   });
 
   // Active subtab inside Sync Panel
-  const [panelTab, setPanelTab] = useState<"actions" | "logs" | "registry" | "settings" | "cleanup">("actions");
+  const [panelTab, setPanelTab] = useState<"actions" | "compare" | "logs" | "registry" | "settings" | "cleanup">("actions");
 
   // Persistent Latest Sync Snapshot State
   interface SyncDataSnapshot {
@@ -428,11 +430,23 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
   const [resetScope, setResetScope] = useState<"ALL" | "MONTH" | "CAMPAIGN" | "EMPLOYEE">("ALL");
   const [resetScopeValue, setResetScopeValue] = useState<string>("");
 
-  // Master Spreadsheet Link (Central 'Execution Pipeline' sheet)
-  const defaultMasterSheetUrl = (
-    process.env.NEXT_PUBLIC_MASTER_SPREADSHEET_URL ||
-    "https://docs.google.com/spreadsheets/d/173oty1YHofleHqdOs0ItSGjlPfCIZi692GxaHbNJl6g/edit"
-  ).trim();
+  // Canonical Master Spreadsheet Link (Central 'Execution Pipeline' sheet)
+  const CANONICAL_MASTER_SHEET_URL =
+    "https://docs.google.com/spreadsheets/d/173oty1YHofleHqdOs0ltSGjlPfClZi692GxaHbNJl6g/edit?gid=0#gid=0";
+
+  const sanitizeMasterSheetUrl = (url?: string | null): string => {
+    if (!url || typeof url !== "string") return CANONICAL_MASTER_SHEET_URL;
+    let clean = url.trim();
+    // Correct case typo (uppercase I vs lowercase l)
+    clean = clean.replace(/Os0ItSG/g, "Os0ltSG").replace(/PfCIZi/g, "PfClZi");
+    if (!clean.startsWith("http")) return CANONICAL_MASTER_SHEET_URL;
+    if (clean.includes("173oty1YH")) {
+      return CANONICAL_MASTER_SHEET_URL;
+    }
+    return clean;
+  };
+
+  const defaultMasterSheetUrl = sanitizeMasterSheetUrl(process.env.NEXT_PUBLIC_MASTER_SPREADSHEET_URL);
   const [masterSheetUrl, setMasterSheetUrl] = useState<string>(defaultMasterSheetUrl);
   const [isMasterSheetUrlSaved, setIsMasterSheetUrlSaved] = useState<boolean>(true);
 
@@ -528,11 +542,11 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
         setIsUrlSaved(true);
       }
 
-      const savedMasterUrl = localStorage.getItem("xcelerate_master_sheet_url");
-      if (savedMasterUrl) {
-        setMasterSheetUrl(savedMasterUrl);
-        setIsMasterSheetUrlSaved(true);
-      }
+      const rawMasterUrl = localStorage.getItem("xcelerate_master_sheet_url");
+      const cleanMasterUrl = sanitizeMasterSheetUrl(rawMasterUrl || defaultMasterSheetUrl);
+      setMasterSheetUrl(cleanMasterUrl);
+      localStorage.setItem("xcelerate_master_sheet_url", cleanMasterUrl);
+      setIsMasterSheetUrlSaved(true);
 
       const savedSync = localStorage.getItem("xcelerate_latest_sync_data");
       if (savedSync) {
@@ -614,11 +628,11 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
   };
 
   const handleSaveMasterSheetUrl = (url: string) => {
-    const trimmed = url.trim();
-    setMasterSheetUrl(trimmed);
+    const cleanUrl = sanitizeMasterSheetUrl(url);
+    setMasterSheetUrl(cleanUrl);
     if (typeof window !== "undefined") {
-      localStorage.setItem("xcelerate_master_sheet_url", trimmed);
-      setIsMasterSheetUrlSaved(Boolean(trimmed));
+      localStorage.setItem("xcelerate_master_sheet_url", cleanUrl);
+      setIsMasterSheetUrlSaved(Boolean(cleanUrl));
     }
     setStatusMessage({
       success: true,
@@ -1241,6 +1255,18 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
           </button>
 
           <button
+            onClick={() => setPanelTab("compare")}
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+              panelTab === "compare"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5"
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5 text-cyan-400 fill-current" />
+            <span>Instant Flow ⟷ DB Sync</span>
+          </button>
+
+          <button
             onClick={() => setPanelTab("logs")}
             className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               panelTab === "logs"
@@ -1710,13 +1736,24 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
 
           {/* SECTION 2: PLATFORM SYNC ('Flow' Master Sheet -> Database) */}
           <div className="space-y-3">
-            <div className="flex items-center space-x-2">
-              <span className="p-1 rounded-md bg-emerald-100 text-emerald-700">
-                <Sparkles className="w-3.5 h-3.5" />
-              </span>
-              <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                2. Sync Master &apos;Flow&apos; Sheet to Database
-              </h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center space-x-2">
+                <span className="p-1 rounded-md bg-emerald-100 text-emerald-700">
+                  <Sparkles className="w-3.5 h-3.5" />
+                </span>
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                  2. Sync Master &apos;Flow&apos; Sheet to Database
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPanelTab("compare")}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#0052FF] font-bold text-xs border border-blue-200 transition-colors cursor-pointer shadow-2xs"
+              >
+                <ArrowDownUp className="w-3.5 h-3.5" />
+                <span>Compare Sheet vs DB First</span>
+              </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -2026,6 +2063,17 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
           )}
 
         </div>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────────────────────── */}
+      {/* TAB: COMPARE & RECONCILIATION (Execution Pipeline Sheet vs Turso Database) */}
+      {/* ───────────────────────────────────────────────────────────────────────────── */}
+      {panelTab === "compare" && (
+        <SheetDbCompareView
+          webAppUrl={webAppUrl}
+          masterSheetUrl={masterSheetUrl}
+          onSyncTriggered={onSyncTriggered}
+        />
       )}
 
       {/* ───────────────────────────────────────────────────────────────────────────── */}
@@ -2610,7 +2658,7 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
                 type="text"
                 value={masterSheetUrl}
                 onChange={(e) => setMasterSheetUrl(e.target.value)}
-                placeholder="https://docs.google.com/spreadsheets/d/173oty1YHofleHqdOs0ItSGjlPfCIZi692GxaHbNJl6g/edit"
+                placeholder={CANONICAL_MASTER_SHEET_URL}
                 className="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono text-slate-800 focus:outline-none focus:border-[#0052FF]"
               />
               <button

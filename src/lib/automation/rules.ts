@@ -44,18 +44,28 @@ export function applySmartStatusCascades(record: Partial<CreatorDeliverableInter
   const today = getTodayDateString();
 
   // Rule A: Drop Cascade & Protection
+  const isStatusDrop = (val: any) => {
+    if (!val) return false;
+    const s = String(val).trim().toLowerCase();
+    return s === "drop" || s === "dropped" || s === "cancelled" || s === "cancel";
+  };
+
   const isDropped = 
-    res.execution_status === "Drop" ||
-    res.confirmation_mail_status === "Drop" ||
-    res.script_status === "Drop" ||
-    res.first_draft_status === "Drop" ||
-    res.final_video_status === "Drop";
+    isStatusDrop(res.execution_status) ||
+    isStatusDrop(res.confirmation_mail_status) ||
+    isStatusDrop(res.script_status) ||
+    isStatusDrop(res.first_draft_status) ||
+    isStatusDrop(res.final_video_status);
 
   if (isDropped) {
     if (res.execution_status !== "Drop") {
       res.execution_status = "Drop";
       automationsApplied.push("Auto-Cascaded: Execution Status set to 'Drop' (creator dropped/withdrawn)");
     }
+    // Dropped creators produce zero revenue, zero creator payout, and zero profit margin
+    res.brand_cost = 0;
+    res.creator_cost = 0;
+    res.gross_margin = 0;
     // Early exit: do not cascade completion or approval rules for a dropped creator
     return { updated: res, automationsApplied };
   }

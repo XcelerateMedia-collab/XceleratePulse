@@ -79,14 +79,55 @@ export async function POST(req: NextRequest) {
 
       await initDatabase();
 
-      // CASE 1: In-Band Direct Data Ingestion
+      // CASE 1: Employee Pull Actions (pull_all, pull_employee)
+      // Pulls data from employee sheets into the Master Execution Pipeline (Flow tab).
+      // Does NOT write to Turso database directly - keeps Flow sheet updated safely.
+      if (action.startsWith("pull_")) {
+        const emp = data.employee || employee;
+        const updatedCount = data.totalUpdated ?? 0;
+        const newCount = data.totalAppended ?? 0;
+        const processedCount = data.totalProcessed ?? (updatedCount + newCount);
+        const newCreatorsList: string[] = Array.isArray(data.newCreators) ? data.newCreators : [];
+        const updatedCreatorsList: string[] = Array.isArray(data.updatedCreators) ? data.updatedCreators : [];
+
+        if (emp) {
+          await updateEmployeeSheetStats(emp, processedCount);
+        }
+
+        const sourceName = action === "pull_employee"
+          ? `Employee Sheet (${emp || "Single"})`
+          : "All Employee Sheets";
+
+        const nCreators = newCreatorsList.length > 0 ? `. New Creators: ${newCreatorsList.slice(0, 8).join(", ")}${newCreatorsList.length > 8 ? "..." : ""}` : "";
+        const detailsStr = `Pulled into Master Flow: ${updatedCount} rows updated, ${newCount} new rows added${nCreators}`;
+
+        await db.execute({
+          sql: `INSERT INTO sync_logs (source, records_synced, status, details) VALUES (?, ?, ?, ?)`,
+          args: [
+            sourceName,
+            processedCount,
+            "SUCCESS",
+            detailsStr
+          ]
+        });
+
+        return NextResponse.json({
+          success: true,
+          action,
+          employee: emp,
+          totalProcessed: processedCount,
+          totalUpdated: updatedCount,
+          totalAppended: newCount,
+          newCreators: newCreatorsList,
+          updatedCreators: updatedCreatorsList,
+          message: data.message || `Successfully pulled into Master Flow sheet (${updatedCount} updated, ${newCount} new creators/rows added).`,
+        });
+      }
+
+      // CASE 2: In-Band Direct Data Ingestion (for sync_all, sync_campaign, sync_month)
       // When Apps Script returns rows array directly, write to Turso immediately!
       if (Array.isArray(data.rows) && data.rows.length > 0) {
         const syncRes = await syncGoogleSheetRows(data.rows);
-        const emp = data.employee || employee;
-        if (emp && (action === "pull_employee" || action.includes("employee"))) {
-          await updateEmployeeSheetStats(emp, syncRes.recordsProcessed);
-        }
         return NextResponse.json({
           success: true,
           action,
@@ -95,12 +136,10 @@ export async function POST(req: NextRequest) {
           totalAppended: syncRes.newCount,
           newCreators: syncRes.newCreators,
           message: `Successfully synchronized ${syncRes.recordsProcessed} deliverables (${syncRes.updatedCount} updated, ${syncRes.newCount} new rows added to database).`,
-          employee: emp,
         });
       }
 
-      // CASE 2: Apps Script executed via reverse Webhook or background sync
-      // Check if the webhook successfully recorded a recent sync log
+      // CASE 3: Apps Script executed via reverse Webhook or background sync
       const recentLog = await db.execute({
         sql: `SELECT * FROM sync_logs WHERE status = 'SUCCESS' ORDER BY id DESC LIMIT 1`
       });
@@ -118,26 +157,6 @@ export async function POST(req: NextRequest) {
         if (now - logTimestamp < 30000 && Number(lastLog.records_synced) > 0) {
           processedCount = Number(lastLog.records_synced);
         }
-      }
-
-      // If this was a pull action, record to sync_logs
-      if (action.startsWith("pull_")) {
-        const sourceName = action === "pull_employee"
-          ? `Employee Sheet (${employee || data.employee || "Single"})`
-          : "All Employee Sheets";
-
-        const nCreators = newCreatorsList.length > 0 ? `. New Creators: ${newCreatorsList.join(", ")}` : "";
-        const detailsStr = `${updatedCount} rows updated, ${newCount} new rows added${nCreators}`;
-
-        await db.execute({
-          sql: `INSERT INTO sync_logs (source, records_synced, status, details) VALUES (?, ?, ?, ?)`,
-          args: [
-            sourceName,
-            processedCount,
-            "SUCCESS",
-            detailsStr
-          ]
-        });
       }
 
       return NextResponse.json({

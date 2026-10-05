@@ -64,18 +64,25 @@ export const ExecutiveKpis: React.FC<ExecutiveKpisProps> = React.memo(({
     let cCost = 0;
     let gMargin = 0;
 
+    const isStatusDrop = (val: any) => {
+      if (!val) return false;
+      const s = String(val).trim().toLowerCase();
+      return s === "drop" || s === "dropped" || s === "cancelled" || s === "cancel";
+    };
+
     for (let i = 0; i < deliverables.length; i++) {
       const d = deliverables[i];
       const isDrop = (
-        d.execution_status === "Drop" ||
-        d.script_status === "Drop" ||
-        d.first_draft_status === "Drop" ||
-        d.final_video_status === "Drop" ||
-        d.confirmation_mail_status === "Drop"
+        isStatusDrop(d.execution_status) ||
+        isStatusDrop(d.script_status) ||
+        isStatusDrop(d.first_draft_status) ||
+        isStatusDrop(d.final_video_status) ||
+        isStatusDrop(d.confirmation_mail_status)
       );
 
       if (isDrop) {
         dCount++;
+        // Dropped creators have strictly ZERO active commercial impact
         dropBCost += d.brand_cost || 0;
       } else {
         aCount++;

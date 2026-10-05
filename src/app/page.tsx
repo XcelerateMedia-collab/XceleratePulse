@@ -9,18 +9,13 @@ import { CampaignPipelineView } from "@/components/pipeline/CampaignPipelineView
 import { PerformanceAnalyticsView } from "@/components/analytics/PerformanceAnalyticsView";
 import { AgencyFinancialsView } from "@/components/admin/AgencyFinancialsView";
 import { AdminSettingsPanel } from "@/components/admin/AdminSettingsPanel";
-import { SyncModal } from "@/components/sync/SyncModal";
 import { CampaignSelector, formatCleanMonth } from "@/components/pipeline/CampaignSelector";
 import { LandingHero } from "@/components/landing/LandingHero";
 import { 
   Kanban, 
   BarChart3, 
   PieChart, 
-  Sparkles, 
-  Building2, 
-  Clock, 
   RefreshCw, 
-  ChevronRight,
   Settings
 } from "lucide-react";
 
@@ -33,6 +28,7 @@ interface PulseAuthSession {
   activeTab: "pipeline" | "analytics" | "financials" | "settings";
   credential?: BrandCredential | null;
   selectedCampaignId?: string;
+  selectedCampaignIds?: string[];
   timestamp: number;
 }
 
@@ -44,23 +40,26 @@ export default function Home() {
   const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
   const [credentials, setCredentials] = useState<BrandCredential[]>([]);
   const [activeCredential, setActiveCredential] = useState<BrandCredential | null>(null);
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string>("");
+  const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(["ALL"]);
   const [deliverables, setDeliverables] = useState<(CreatorDeliverableBrandView | CreatorDeliverableInternal)[]>([]);
   const [isInternal, setIsInternal] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<"pipeline" | "analytics" | "financials" | "settings">("pipeline");
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Active refs to ensure callbacks have zero-cost permanent references across renders
+  // Active refs to ensure callbacks have stable references across renders
   const roleRef = useRef(role);
-  roleRef.current = role;
   const selectedOrgRef = useRef(selectedOrg);
-  selectedOrgRef.current = selectedOrg;
-  const selectedCampaignIdRef = useRef(selectedCampaignId);
-  selectedCampaignIdRef.current = selectedCampaignId;
+  const selectedCampaignIdsRef = useRef(selectedCampaignIds);
   const deliverablesRef = useRef(deliverables);
-  deliverablesRef.current = deliverables;
   const activeCredentialRef = useRef(activeCredential);
-  activeCredentialRef.current = activeCredential;
+
+  useEffect(() => {
+    roleRef.current = role;
+    selectedOrgRef.current = selectedOrg;
+    selectedCampaignIdsRef.current = selectedCampaignIds;
+    deliverablesRef.current = deliverables;
+    activeCredentialRef.current = activeCredential;
+  }, [role, selectedOrg, selectedCampaignIds, deliverables, activeCredential]);
 
   // Determine effective assigned campaign IDs based on active credential or matched org
   const effectiveAssignedCampaignIds = useMemo(() => {
@@ -88,7 +87,7 @@ export default function Home() {
       }
     } catch {}
     setActiveCredential(null);
-    setSelectedCampaignId("ALL");
+    setSelectedCampaignIds(["ALL"]);
     setRole("BRAND_CLIENT");
     setSelectedOrg("All Organizations");
     setActiveTab("pipeline");
@@ -107,7 +106,13 @@ export default function Home() {
             if (session.selectedOrg) setSelectedOrg(session.selectedOrg);
             if (session.activeTab) setActiveTab(session.activeTab);
             if (session.credential) setActiveCredential(session.credential);
-            if (session.selectedCampaignId) setSelectedCampaignId(session.selectedCampaignId);
+            if (session.selectedCampaignIds && Array.isArray(session.selectedCampaignIds) && session.selectedCampaignIds.length > 0) {
+              setSelectedCampaignIds(session.selectedCampaignIds);
+            } else if (session.selectedCampaignId) {
+              setSelectedCampaignIds([session.selectedCampaignId]);
+            } else {
+              setSelectedCampaignIds(["ALL"]);
+            }
             setViewMode("portal");
           }
         }
@@ -130,7 +135,8 @@ export default function Home() {
           selectedOrg,
           activeTab,
           credential: activeCredential,
-          selectedCampaignId,
+          selectedCampaignId: selectedCampaignIds[0] || "ALL",
+          selectedCampaignIds,
           timestamp: Date.now(),
         };
         localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
@@ -142,7 +148,7 @@ export default function Home() {
         localStorage.removeItem(SESSION_STORAGE_KEY);
       } catch {}
     }
-  }, [isSessionRestoring, viewMode, role, selectedOrg, activeTab, activeCredential, selectedCampaignId]);
+  }, [isSessionRestoring, viewMode, role, selectedOrg, activeTab, activeCredential, selectedCampaignIds]);
 
   // Pre-load credentials on mount and re-validate active restored credential
   useEffect(() => {
@@ -184,7 +190,7 @@ export default function Home() {
     if (newOrg) setSelectedOrg(orgToSet);
     if (initialTab) setActiveTab(tabToSet);
     setActiveCredential(cred || null);
-    setSelectedCampaignId("ALL");
+    setSelectedCampaignIds(["ALL"]);
     setViewMode("portal");
 
     try {
@@ -196,6 +202,7 @@ export default function Home() {
           activeTab: tabToSet,
           credential: cred || null,
           selectedCampaignId: "ALL",
+          selectedCampaignIds: ["ALL"],
           timestamp: Date.now(),
         };
         localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
@@ -209,62 +216,54 @@ export default function Home() {
   const allDeliverablesRef = useRef<(CreatorDeliverableBrandView | CreatorDeliverableInternal)[]>([]);
   const campaignCacheRef = useRef<Map<string, (CreatorDeliverableBrandView | CreatorDeliverableInternal)[]>>(new Map());
 
-  // Load campaigns, credentials, and deliverables with a 100% stable reference to prevent re-renders on tab switch
+  // Load campaigns, credentials, and deliverables with a 100% stable reference
   const loadData = useCallback(async () => {
     if (deliverablesRef.current.length === 0) {
       setIsLoading(true);
     }
     try {
-      const targetCampId = selectedCampaignIdRef.current || "ALL";
-      if (!selectedCampaignIdRef.current) {
-        setSelectedCampaignId("ALL");
-      }
-
       const assignedIds = effectiveAssignedCampaignIds;
 
       const [campList, credList, delivRes] = await Promise.all([
         getCampaigns(roleRef.current, selectedOrgRef.current, assignedIds),
         getCredentials(),
-        getCampaignDeliverables(targetCampId, roleRef.current, selectedOrgRef.current, assignedIds),
+        getCampaignDeliverables("ALL", roleRef.current, selectedOrgRef.current, assignedIds),
       ]);
 
       setCampaigns(campList);
       setCredentials(credList);
-      setDeliverables(delivRes.deliverables);
       setIsInternal(delivRes.isInternal);
 
-      // Pre-cache deliverables for instant switching
-      if (targetCampId === "ALL") {
-        allDeliverablesRef.current = delivRes.deliverables;
-        campaignCacheRef.current.set("ALL", delivRes.deliverables);
-        // Pre-index by campaign_id
-        for (let i = 0; i < delivRes.deliverables.length; i++) {
-          const d = delivRes.deliverables[i];
-          if (d.campaign_id) {
-            const arr = campaignCacheRef.current.get(d.campaign_id) || [];
-            arr.push(d);
-            campaignCacheRef.current.set(d.campaign_id, arr);
-          }
+      // Cache all deliverables for instant 0ms multi-selection filtering
+      allDeliverablesRef.current = delivRes.deliverables;
+      campaignCacheRef.current.set("ALL", delivRes.deliverables);
+
+      // Pre-index by campaign_id
+      for (let i = 0; i < delivRes.deliverables.length; i++) {
+        const d = delivRes.deliverables[i];
+        if (d.campaign_id) {
+          const arr = campaignCacheRef.current.get(d.campaign_id) || [];
+          arr.push(d);
+          campaignCacheRef.current.set(d.campaign_id, arr);
         }
+      }
+
+      // Apply current multi-campaign filter
+      const currentSelected = selectedCampaignIdsRef.current;
+      const isAll = !currentSelected || currentSelected.length === 0 || currentSelected.includes("ALL");
+      
+      if (isAll) {
+        setDeliverables(delivRes.deliverables);
       } else {
-        campaignCacheRef.current.set(targetCampId, delivRes.deliverables);
-        // Prefetch ALL in background so any future campaign switch is 0ms instant
-        if (allDeliverablesRef.current.length === 0) {
-          getCampaignDeliverables("ALL", roleRef.current, selectedOrgRef.current, assignedIds)
-            .then((allRes) => {
-              allDeliverablesRef.current = allRes.deliverables;
-              campaignCacheRef.current.set("ALL", allRes.deliverables);
-              for (let i = 0; i < allRes.deliverables.length; i++) {
-                const d = allRes.deliverables[i];
-                if (d.campaign_id) {
-                  const arr = campaignCacheRef.current.get(d.campaign_id) || [];
-                  arr.push(d);
-                  campaignCacheRef.current.set(d.campaign_id, arr);
-                }
-              }
-            })
-            .catch(() => {});
-        }
+        const selSet = new Set(currentSelected);
+        const selNames = new Set(
+          campList.filter(c => selSet.has(c.id)).map(c => c.campaign_name.trim().toLowerCase())
+        );
+        const filtered = delivRes.deliverables.filter(d => 
+          (d.campaign_id && selSet.has(d.campaign_id)) ||
+          (d.campaign_name && selNames.has(d.campaign_name.trim().toLowerCase()))
+        );
+        setDeliverables(filtered);
       }
     } catch (err) {
       console.error("Failed to load campaign data:", err);
@@ -293,51 +292,38 @@ export default function Home() {
     }
   }, []);
 
-  // Switch active campaign within the organization or select ALL (Instant 0ms update + background sync)
-  const handleCampaignChange = useCallback(async (campId: string) => {
-    setSelectedCampaignId(campId);
+  // Multi-campaign selection change (Instant 0ms in-memory update)
+  const handleCampaignsChange = useCallback((campIds: string[]) => {
+    const normalizedIds = campIds.length === 0 || campIds.includes("ALL") ? ["ALL"] : campIds;
+    setSelectedCampaignIds(normalizedIds);
 
-    // 1. INSTANT OPTIMISTIC IN-MEMORY FILTERING (0ms response)
-    if (campId === "ALL") {
+    if (normalizedIds.includes("ALL")) {
       if (allDeliverablesRef.current.length > 0) {
         setDeliverables(allDeliverablesRef.current);
       }
     } else {
-      const cached = campaignCacheRef.current.get(campId);
-      if (cached && cached.length > 0) {
-        setDeliverables(cached);
-      } else if (allDeliverablesRef.current.length > 0) {
-        const targetCamp = campaigns.find(c => c.id === campId);
-        const targetName = targetCamp?.campaign_name?.trim().toLowerCase();
-        const inMemoryMatches = allDeliverablesRef.current.filter((d) => 
-          d.campaign_id === campId || 
-          (targetName && d.campaign_name && d.campaign_name.trim().toLowerCase() === targetName)
-        );
-        if (inMemoryMatches.length > 0) {
-          setDeliverables(inMemoryMatches);
-          campaignCacheRef.current.set(campId, inMemoryMatches);
-        }
-      }
-    }
-
-    // 2. BACKGROUND REVALIDATION / SERVER FETCH
-    try {
-      const delivRes = await getCampaignDeliverables(
-        campId, 
-        roleRef.current, 
-        selectedOrgRef.current, 
-        effectiveAssignedCampaignIds
+      const selSet = new Set(normalizedIds);
+      const selNames = new Set(
+        campaigns.filter(c => selSet.has(c.id)).map(c => c.campaign_name.trim().toLowerCase())
       );
-      setDeliverables(delivRes.deliverables);
-      setIsInternal(delivRes.isInternal);
-      campaignCacheRef.current.set(campId, delivRes.deliverables);
-      if (campId === "ALL") {
-        allDeliverablesRef.current = delivRes.deliverables;
+      if (allDeliverablesRef.current.length > 0) {
+        const filtered = allDeliverablesRef.current.filter(d => 
+          (d.campaign_id && selSet.has(d.campaign_id)) ||
+          (d.campaign_name && selNames.has(d.campaign_name.trim().toLowerCase()))
+        );
+        setDeliverables(filtered);
       }
-    } catch (err) {
-      console.error("Failed to fetch deliverables for campaign:", err);
     }
-  }, [campaigns, effectiveAssignedCampaignIds]);
+  }, [campaigns]);
+
+  // Single-campaign compatibility wrapper
+  const handleSingleCampaignChange = useCallback((campId: string) => {
+    if (campId === "ALL") {
+      handleCampaignsChange(["ALL"]);
+    } else {
+      handleCampaignsChange([campId]);
+    }
+  }, [handleCampaignsChange]);
 
   useEffect(() => {
     if (viewMode === "portal") {
@@ -345,14 +331,46 @@ export default function Home() {
     }
   }, [role, selectedOrg, viewMode, effectiveAssignedCampaignIds]);
 
-  const isAllSelected = selectedCampaignId === "ALL";
-  const currentCampaign = isAllSelected ? null : (campaigns.find((c) => c.id === selectedCampaignId) || campaigns[0]);
-  const activeDisplayTitle = isAllSelected 
-    ? "All Campaigns (Consolidated Overview)" 
-    : (currentCampaign?.campaign_name || "Campaign Execution Portal");
+  const isAllSelected = useMemo(() => {
+    if (selectedCampaignIds.length === 0) return true;
+    if (selectedCampaignIds.includes("ALL")) return true;
+    if (campaigns.length > 0 && selectedCampaignIds.length === campaigns.length) return true;
+    return false;
+  }, [selectedCampaignIds, campaigns.length]);
+
+  const isSingleSelected = !isAllSelected && selectedCampaignIds.length === 1;
+
+  const currentCampaign = useMemo(() => {
+    if (isSingleSelected) {
+      return campaigns.find((c) => c.id === selectedCampaignIds[0]) || null;
+    }
+    return null;
+  }, [isSingleSelected, selectedCampaignIds, campaigns]);
+
+  const selectedCampaignsList = useMemo(() => {
+    if (isAllSelected) return campaigns;
+    const set = new Set(selectedCampaignIds);
+    return campaigns.filter((c) => set.has(c.id));
+  }, [isAllSelected, selectedCampaignIds, campaigns]);
+
+  const activeDisplayTitle = useMemo(() => {
+    if (isAllSelected) {
+      return "All Campaigns (Consolidated Overview)";
+    }
+    if (isSingleSelected && currentCampaign) {
+      return currentCampaign.campaign_name || "Campaign Execution Portal";
+    }
+    if (selectedCampaignsList.length > 0) {
+      const names = selectedCampaignsList.map(c => c.campaign_name);
+      const preview = names.slice(0, 2).join(", ");
+      const extra = names.length > 2 ? ` + ${names.length - 2} more` : "";
+      return `${selectedCampaignsList.length} Campaigns Selected (${preview}${extra})`;
+    }
+    return "Selected Campaigns View";
+  }, [isAllSelected, isSingleSelected, currentCampaign, selectedCampaignsList]);
 
   const brandPocValue = useMemo(() => {
-    if (isAllSelected) return "Multiple POCs";
+    if (isAllSelected || !isSingleSelected) return "Multiple POCs";
     if (
       currentCampaign?.brand_agency_poc &&
       currentCampaign.brand_agency_poc.trim() &&
@@ -361,7 +379,7 @@ export default function Home() {
       return currentCampaign.brand_agency_poc.trim();
     }
     return "N/A";
-  }, [isAllSelected, currentCampaign?.brand_agency_poc]);
+  }, [isAllSelected, isSingleSelected, currentCampaign?.brand_agency_poc]);
 
   // While restoring session from storage on page refresh, show seamless splash to prevent landing flash
   if (isSessionRestoring) {
@@ -416,32 +434,56 @@ export default function Home() {
           
           {/* Campaign Selector / Title */}
           <div className="space-y-1.5 min-w-0">
-            {/* Metadata Breadcrumb & Filter Switcher Row */}
-            <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
-              <div className="flex items-center space-x-1.5 sm:space-x-2 text-xs text-[#0052FF] font-bold uppercase tracking-wider">
-                <span>{isAllSelected ? "ALL ORGANIZATIONS" : (currentCampaign?.org_name || selectedOrg)}</span>
-                <span className="text-slate-300">/</span>
-                <span className="text-slate-500 font-semibold">
-                  {isAllSelected ? "All Months" : formatCleanMonth(currentCampaign?.campaign_month)}
+            {/* Header Controls: Campaign Filter & Breadcrumbs */}
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              {/* Multi-Campaign Filter Trigger: Always anchored at fixed coordinate on the left */}
+              {campaigns.length > 0 && (
+                <div className="shrink-0">
+                  <CampaignSelector
+                    campaigns={campaigns}
+                    selectedCampaignIds={selectedCampaignIds}
+                    onSelectCampaigns={handleCampaignsChange}
+                  />
+                </div>
+              )}
+
+              {/* Clean Vertical Divider */}
+              <div className="h-4 w-px bg-slate-300/80 shrink-0 hidden sm:block" />
+
+              {/* Metadata Breadcrumbs: flex-1, never pushes or wraps the trigger button */}
+              <div className="flex items-center space-x-1.5 sm:space-x-2 text-xs text-[#0052FF] font-bold uppercase tracking-wider min-w-0 truncate">
+                <span className="truncate">
+                  {isAllSelected 
+                    ? "ALL ORGANIZATIONS" 
+                    : isSingleSelected 
+                      ? (currentCampaign?.org_name || selectedOrg) 
+                      : `${selectedCampaignsList.length} CAMPAIGNS SELECTED`}
                 </span>
-                {!isAllSelected && currentCampaign?.id && (
+                <span className="text-slate-300 shrink-0">/</span>
+                <span className="text-slate-500 font-semibold truncate shrink-0">
+                  {isAllSelected 
+                    ? "All Months" 
+                    : isSingleSelected 
+                      ? formatCleanMonth(currentCampaign?.campaign_month) 
+                      : "Filtered View"}
+                </span>
+                {isSingleSelected && currentCampaign?.id && (
                   <>
-                    <span className="text-slate-300">•</span>
-                    <span className="text-slate-600 font-mono lowercase bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-[10px]">
+                    <span className="text-slate-300 shrink-0">•</span>
+                    <span className="text-slate-600 font-mono lowercase bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-[10px] shrink-0">
                       {currentCampaign.id}
                     </span>
                   </>
                 )}
+                {!isAllSelected && !isSingleSelected && (
+                  <>
+                    <span className="text-slate-300 shrink-0">•</span>
+                    <span className="text-blue-700 bg-blue-50 font-semibold px-2 py-0.5 rounded-full border border-blue-200 text-[10px] shrink-0">
+                      {deliverables.length} Deliverables
+                    </span>
+                  </>
+                )}
               </div>
-
-              {/* Multi-Campaign Switcher & ALL Filter Option */}
-              {campaigns.length > 0 && (
-                <CampaignSelector
-                  campaigns={campaigns}
-                  selectedCampaignId={selectedCampaignId}
-                  onSelect={handleCampaignChange}
-                />
-              )}
             </div>
             
             {/* Full Campaign Title (Dedicated Line, never truncated) */}
@@ -536,9 +578,9 @@ export default function Home() {
                 deliverables={deliverables}
                 isInternal={isInternal}
                 role={role}
-                xceleratePoc={isAllSelected ? "All Ops Leads" : (currentCampaign?.xcelerate_poc || "Rohan Mehra")}
+                xceleratePoc={isAllSelected || !isSingleSelected ? "All Ops Leads" : (currentCampaign?.xcelerate_poc || "Rohan Mehra")}
                 brandPoc={brandPocValue}
-                paymentCycle={isAllSelected ? "Multiple Cycles" : (currentCampaign?.brand_payment_cycle || "30 Days Net")}
+                paymentCycle={isAllSelected || !isSingleSelected ? "Multiple Cycles" : (currentCampaign?.brand_payment_cycle || "30 Days Net")}
                 onDeliverableUpdated={loadData}
               />
             </div>

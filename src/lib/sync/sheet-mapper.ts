@@ -213,8 +213,8 @@ export function mapRowToDeliverable(
   );
   const executionOwner = parseString(n.executionowner || rawRow["Execution Owner"] || rawPoc, "");
   const explicitBrand = parseString(n.brandagencyname || rawRow["Brand/Agency Name"] || rawRow["Brand Name"], "");
-  // Strictly use explicit Brand/Agency Name from Column E. Never guess or extract fake brands from campaign names!
-  const orgName = explicitBrand.trim() || "Unassigned";
+  // Use explicit Brand/Agency Name from Column E if available, otherwise use Campaign Name
+  const orgName = explicitBrand.trim() || (campaignName && campaignName !== "Influencer Campaign" ? campaignName.trim() : "Direct Brand");
   
   const xceleratePoc = rawPoc || "Team Xcelerate";
   const rawBrandPoc = parseString(
@@ -579,6 +579,27 @@ export function mapRowToDeliverable(
   // 4. AUTOMATIC STATUS CASCADING & SMART DATE POPULATION
   const { updated: finalDeliverable } = applySmartStatusCascades(initialDeliverable);
 
+  // 5. COMMERCIAL EXCLUSION FOR DROPPED CREATORS
+  // Dropped creators produce ZERO revenue, ZERO creator payout, and ZERO profit margin
+  const isDropStatus = (val: any) => {
+    if (!val) return false;
+    const s = String(val).trim().toLowerCase();
+    return s === "drop" || s === "dropped" || s === "cancelled" || s === "cancel";
+  };
+
+  if (
+    isDropStatus(finalDeliverable.execution_status) ||
+    isDropStatus(finalDeliverable.script_status) ||
+    isDropStatus(finalDeliverable.first_draft_status) ||
+    isDropStatus(finalDeliverable.final_video_status) ||
+    isDropStatus(finalDeliverable.confirmation_mail_status)
+  ) {
+    finalDeliverable.execution_status = "Drop" as any;
+    finalDeliverable.brand_cost = 0;
+    finalDeliverable.creator_cost = 0;
+    finalDeliverable.gross_margin = 0;
+  }
+
   return {
     campaign: {
       id: campaignId,
@@ -603,6 +624,7 @@ export async function syncGoogleSheetRows(rows: SheetRowRaw[]) {
   await initDatabase();
 
   const fingerprintCounts = new Map<string, number>();
+  const seenIdsInBatch = new Map<string, number>();
   const campaignsMap = new Map<string, any>();
   const orgsMap = new Map<string, any>();
   const deliverableStatements: { sql: string; args: any[] }[] = [];
@@ -664,6 +686,18 @@ export async function syncGoogleSheetRows(rows: SheetRowRaw[]) {
       const sheetRowLabel = rawRow["_sheet_row"] ? `Row ${rawRow["_sheet_row"]}` : `Row index ${idx + 2}`;
       console.warn(`[Sheet Sync Audit] Skipped ${sheetRowLabel}: missing Deliverable ID`);
       continue;
+    }
+
+    // Safeguard: Disambiguate duplicate Deliverable IDs within the same sync batch
+    const baseId = deliverable.id;
+    if (seenIdsInBatch.has(baseId)) {
+      const dupeCount = (seenIdsInBatch.get(baseId) || 1) + 1;
+      seenIdsInBatch.set(baseId, dupeCount);
+      const rowSuffix = rawRow["_sheet_row"] ? `_r${rawRow["_sheet_row"]}` : `_d${dupeCount}`;
+      deliverable.id = `${baseId}${rowSuffix}`;
+      deliverable.unique_id = deliverable.id;
+    } else {
+      seenIdsInBatch.set(baseId, 1);
     }
 
     // Deduplicate campaigns
@@ -849,7 +883,7 @@ export async function syncGoogleSheetRows(rows: SheetRowRaw[]) {
   const existingIdSet = new Set<string>();
   if (allIds.length > 0) {
     try {
-      const ID_CHUNK = 200;
+      const ID_CHUNK = 500;
       for (let i = 0; i < allIds.length; i += ID_CHUNK) {
         const chunk = allIds.slice(i, i + ID_CHUNK);
         const placeholders = chunk.map(() => "?").join(",");
@@ -869,10 +903,14 @@ export async function syncGoogleSheetRows(rows: SheetRowRaw[]) {
   let updatedCount = 0;
   let newCount = 0;
   const newCreatorsSet = new Set<string>();
+  const updatedCreatorsSet = new Set<string>();
 
   for (const d of allDeliverables) {
     if (existingIdSet.has(d.id)) {
       updatedCount++;
+      if (d.creator_name && d.creator_name.trim()) {
+        updatedCreatorsSet.add(d.creator_name.trim());
+      }
     } else {
       newCount++;
       if (d.creator_name && d.creator_name.trim()) {
@@ -881,12 +919,20 @@ export async function syncGoogleSheetRows(rows: SheetRowRaw[]) {
     }
   }
   const newCreators = Array.from(newCreatorsSet);
+  const updatedCreators = Array.from(updatedCreatorsSet);
 
-  // Execute in batches of up to 50 statements for blazing-fast atomic writes
-  const BATCH_SIZE = 50;
+  // Execute in batches of up to 200 statements for blazing-fast atomic writes
+  const BATCH_SIZE = 200;
   for (let i = 0; i < allBatchStatements.length; i += BATCH_SIZE) {
     const chunk = allBatchStatements.slice(i, i + BATCH_SIZE);
     await db.batch(chunk, "write");
+  }
+
+  // If full master sheet is synced, purge any obsolete temporary fallback _r suffixed records in database
+  if (rows.length >= 100) {
+    try {
+      await db.execute("DELETE FROM campaign_creators WHERE INSTR(id, '_r') > 0");
+    } catch (_) {}
   }
 
   const insertedOrUpdated = deliverableStatements.length;
@@ -912,5 +958,6 @@ export async function syncGoogleSheetRows(rows: SheetRowRaw[]) {
     updatedCount,
     newCount,
     newCreators,
+    updatedCreators,
   };
 }
