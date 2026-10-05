@@ -1582,64 +1582,79 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                           {item.creator_name.charAt(0)}
                         </div>
                         <div className="min-w-0">
-                          <div className="font-bold text-slate-900 group-hover:text-[#0052FF] transition-colors flex items-center space-x-1.5 truncate">
-                            <span className={isItemDropped(item) ? "line-through text-slate-400 decoration-rose-400" : ""}>
+                          {/* Line 1: Creator Name, Profile Link, Niche, Status */}
+                          <div className="flex items-center space-x-2 truncate">
+                            <span className={`font-extrabold text-[13px] text-slate-900 group-hover:text-[#0052FF] transition-colors truncate ${
+                              isItemDropped(item) ? "line-through text-slate-400 decoration-rose-400" : ""
+                            }`}>
                               {item.creator_name}
                             </span>
-                            {isItemDropped(item) && (
-                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-50 text-rose-600 border border-rose-200 font-bold uppercase tracking-wider shrink-0">
-                                Dropped
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[11px] text-slate-500 flex items-center space-x-1.5 mt-0.5 truncate">
-                            {/* Brand / Agency badge (Never show "Unassigned") */}
-                            {(() => {
-                              const brandLabel = (item.org_name && item.org_name !== "Unassigned")
-                                ? item.org_name
-                                : (item.campaign_name && item.campaign_name !== "Consolidated Campaign" ? item.campaign_name : null);
-                              if (!brandLabel) return null;
-                              return (
-                                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-50 text-[#0052FF] border border-blue-200/70 shrink-0">
-                                  {brandLabel}
-                                </span>
-                              );
-                            })()}
-                            <span className="text-[#0052FF] font-semibold truncate">{item.niche}</span>
-                            {/* Brand / Agency POC badge (Client Lead) */}
-                            {item.brand_agency_poc && 
-                             item.brand_agency_poc.trim() !== "" && 
-                             item.brand_agency_poc.toUpperCase() !== "N/A" && 
-                             item.brand_agency_poc.toLowerCase() !== "unassigned" && 
-                             item.brand_agency_poc !== "Brand Manager" && (
-                              <span 
-                                className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold shrink-0 flex items-center gap-1"
-                                title={`Brand / Agency POC: ${item.brand_agency_poc}`}
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-                                {item.brand_agency_poc}
-                              </span>
-                            )}
-                            {/* Xcelerate POC / Execution Owner badge */}
-                            {isInternal && ((item as CreatorDeliverableInternal).execution_owner || item.xcelerate_poc) && (
-                              <span 
-                                className="text-[9px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 font-bold shrink-0 flex items-center gap-1"
-                                title={`Agency Lead: ${(item as CreatorDeliverableInternal).execution_owner || item.xcelerate_poc}`}
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
-                                {(item as CreatorDeliverableInternal).execution_owner || item.xcelerate_poc}
-                              </span>
-                            )}
                             {item.profile_url && (
                               <a
                                 href={item.profile_url}
                                 target="_blank"
                                 rel="noreferrer"
                                 onClick={(e) => e.stopPropagation()}
-                                className="text-slate-400 hover:text-[#0052FF] shrink-0"
+                                className="text-slate-400 hover:text-[#0052FF] transition-colors shrink-0"
+                                title="Open creator profile"
                               >
-                                <ExternalLink className="w-3 h-3 inline" />
+                                <ExternalLink className="w-3.5 h-3.5 inline" />
                               </a>
+                            )}
+                            {item.niche && (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200/70 shrink-0">
+                                {item.niche}
+                              </span>
+                            )}
+                            {isItemDropped(item) && (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-50 text-rose-600 border border-rose-200 font-bold uppercase tracking-wider shrink-0">
+                                Dropped
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Line 2: Campaign Context & Clear POC Ownership */}
+                          <div className="flex items-center space-x-1.5 mt-1 text-[11px] text-slate-500 truncate">
+                            {/* Brand / Campaign Badge */}
+                            {(() => {
+                              const brandLabel = (item.org_name && item.org_name !== "Unassigned")
+                                ? item.org_name
+                                : (item.campaign_name && item.campaign_name !== "Consolidated Campaign" ? item.campaign_name : null);
+                              if (!brandLabel) return null;
+                              return (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50/90 text-[#0052FF] border border-blue-200/70 shrink-0 flex items-center gap-1">
+                                  <Building2 className="w-2.5 h-2.5 text-[#0052FF] shrink-0" />
+                                  <span>{brandLabel}</span>
+                                </span>
+                              );
+                            })()}
+
+                            {/* Brand / Agency POC (Client Lead) */}
+                            {item.brand_agency_poc && 
+                             item.brand_agency_poc.trim() !== "" && 
+                             item.brand_agency_poc.toUpperCase() !== "N/A" && 
+                             item.brand_agency_poc.toLowerCase() !== "unassigned" && 
+                             item.brand_agency_poc !== "Brand Manager" && (
+                              <span 
+                                className="text-[9.5px] px-2 py-0.5 rounded-md bg-emerald-50/90 text-emerald-800 border border-emerald-200/80 font-medium shrink-0 flex items-center gap-1"
+                                title={`Brand / Agency POC: ${item.brand_agency_poc}`}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                <span className="text-emerald-600 font-bold text-[9px]">Client:</span>
+                                <span className="font-semibold">{item.brand_agency_poc}</span>
+                              </span>
+                            )}
+
+                            {/* Xcelerate POC / Execution Owner (Agency Lead) */}
+                            {isInternal && ((item as CreatorDeliverableInternal).execution_owner || item.xcelerate_poc) && (
+                              <span 
+                                className="text-[9.5px] px-2 py-0.5 rounded-md bg-amber-50/90 text-amber-900 border border-amber-200/80 font-medium shrink-0 flex items-center gap-1"
+                                title={`Agency Lead: ${(item as CreatorDeliverableInternal).execution_owner || item.xcelerate_poc}`}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
+                                <span className="text-amber-600 font-bold text-[9px]">Lead:</span>
+                                <span className="font-semibold">{(item as CreatorDeliverableInternal).execution_owner || item.xcelerate_poc}</span>
+                              </span>
                             )}
                           </div>
                         </div>
