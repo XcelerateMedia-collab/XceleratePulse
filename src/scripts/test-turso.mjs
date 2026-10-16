@@ -99,6 +99,7 @@ async function testConnection() {
         product_status TEXT DEFAULT 'Pending',
         confirmation_mail_status TEXT DEFAULT 'Pending',
         script_link TEXT,
+        script_received_date TEXT,
         script_status TEXT DEFAULT 'Script Pending',
         script_approval_date TEXT,
         first_draft_status TEXT DEFAULT 'Draft Pending',

@@ -72,6 +72,7 @@ export async function initDatabase(): Promise<void> {
       product_status TEXT DEFAULT 'Not Applicable',
       confirmation_mail_status TEXT DEFAULT 'Pending',
       script_link TEXT,
+      script_received_date TEXT,
       script_status TEXT DEFAULT 'Script Pending',
       script_approval_date TEXT,
       first_draft_status TEXT DEFAULT 'Draft Pending',
@@ -186,6 +187,7 @@ export async function initDatabase(): Promise<void> {
     "ALTER TABLE campaign_creators ADD COLUMN day30_shares INTEGER DEFAULT 0",
     "ALTER TABLE campaign_creators ADD COLUMN day30_avg_watch_time TEXT",
     "ALTER TABLE campaign_creators ADD COLUMN brand_agency_poc TEXT",
+    "ALTER TABLE campaign_creators ADD COLUMN script_received_date TEXT",
     "ALTER TABLE campaigns ADD COLUMN brief_name TEXT",
     "ALTER TABLE brand_credentials ADD COLUMN campaign_access_mode TEXT DEFAULT 'ALL'",
     "ALTER TABLE brand_credentials ADD COLUMN assigned_campaign_ids TEXT DEFAULT '[]'"

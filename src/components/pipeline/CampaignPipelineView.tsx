@@ -1095,7 +1095,7 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
   const exportPipelineCsv = () => {
     const headers = [
       "Creator Name", "Category", "Followers", "Niche", "City", "Deliverables",
-      "Script Status", "1st Draft Status", "Execution Status", "Brand Commercial (INR)", "Live Link"
+      "Script Received Date", "Script Status", "Script Approval Date", "1st Draft Status", "1st Draft Date", "Execution Status", "Brand Commercial (INR)", "Live Link"
     ];
 
     const rows = filtered.map(d => [
@@ -1105,8 +1105,11 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
       `"${d.niche}"`,
       `"${d.city || "Pan-India"}"`,
       `"${d.deliverables}"`,
+      `"${d.script_received_date || ""}"`,
       `"${d.script_status}"`,
+      `"${d.script_approval_date || ""}"`,
       `"${d.first_draft_status}"`,
+      `"${d.first_draft_date || ""}"`,
       `"${d.execution_status}"`,
       d.brand_cost,
       `"${d.live_link || ""}"`
@@ -1730,6 +1733,11 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                           </a>
                         );
                       })()}
+                      {item.script_received_date && (
+                        <div className="text-[10px] text-slate-500 font-medium mt-0.5">
+                          Received: {formatDateOnly(item.script_received_date)}
+                        </div>
+                      )}
                       {item.script_approval_date && (
                         <div className="text-[10px] text-slate-400 mt-0.5">
                           Approved: {formatDateOnly(item.script_approval_date)}
@@ -2170,9 +2178,14 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                     <div className="p-2 rounded-xl bg-slate-50/80 border border-slate-200/70 space-y-1">
                       <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">1. Script</span>
                       <div>{getScriptStatusBadge(item.script_status)}</div>
+                      {item.script_received_date && (
+                        <div className="text-[9px] text-slate-500 font-medium">
+                          Rec: {formatDateOnly(item.script_received_date)}
+                        </div>
+                      )}
                       {item.script_approval_date && (
                         <div className="text-[9px] text-slate-400">
-                          {formatDateOnly(item.script_approval_date)}
+                          App: {formatDateOnly(item.script_approval_date)}
                         </div>
                       )}
                       {(() => {
@@ -2556,6 +2569,16 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                           );
                         })()}
                       </div>
+                      {(item.script_received_date || item.script_approval_date) && (
+                        <div className="mt-1 flex items-center justify-between text-[9px] text-slate-400">
+                          {item.script_received_date ? (
+                            <span>Rec: {formatDateOnly(item.script_received_date)}</span>
+                          ) : <span />}
+                          {item.script_approval_date && (
+                            <span>App: {formatDateOnly(item.script_approval_date)}</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))
                 ) : (
@@ -3162,7 +3185,13 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                 </div>
 
                 {/* Milestone Approval Dates Strip */}
-                <div className="grid grid-cols-3 gap-2 text-center text-xs pt-1">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs pt-1">
+                  <div className="p-2.5 rounded-xl bg-slate-50/90 border border-slate-200/80">
+                    <div className="text-[10px] text-slate-400 font-semibold">Script Received</div>
+                    <div className="text-xs font-black text-slate-800 mt-0.5 truncate">
+                      {formatDateOnly(selectedCreator.script_received_date) || "Pending"}
+                    </div>
+                  </div>
                   <div className="p-2.5 rounded-xl bg-slate-50/90 border border-slate-200/80">
                     <div className="text-[10px] text-slate-400 font-semibold">Script Approved</div>
                     <div className="text-xs font-black text-slate-800 mt-0.5 truncate">

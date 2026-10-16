@@ -476,6 +476,16 @@ export function mapRowToDeliverable(
         ""
       )
     ),
+    script_received_date: parseDateOnly(
+      n.scriptreceiveddate || 
+      n.scriptreceived || 
+      n.scriptreceivedate ||
+      n.scriptrecdate ||
+      rawRow["Script Received Date"] || 
+      rawRow["Script Received"] || 
+      rawRow["Script Date"], 
+      ""
+    ),
     script_status: normalizeWorkflowStatus(
       n.scriptstatus || 
       rawRow["Script Status(Approval Pending, Drop, Script Pending, Approved)"] || 
@@ -725,7 +735,7 @@ export async function syncGoogleSheetRows(rows: SheetRowRaw[]) {
         id, campaign_id, creator_name, niche, profile_url, followers_count, category,
         city, state, language, gender, phone_number, deliverables, brand_cost, creator_cost,
         gross_margin, address, product_status, confirmation_mail_status, script_link,
-        script_status, script_approval_date, first_draft_status, first_draft_date,
+        script_received_date, script_status, script_approval_date, first_draft_status, first_draft_date,
         revision_drive_link, final_video_status, video_approval_date, live_link, live_date,
         execution_status, total_views, likes, comments, saves, shares, avg_watch_time,
         engagement_rate, account_reach, screenshots, day7_views, day7_er, day15_views,
@@ -738,7 +748,7 @@ export async function syncGoogleSheetRows(rows: SheetRowRaw[]) {
         ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?,
-        ?, ?, ?, ?,
+        ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?,
@@ -768,6 +778,7 @@ export async function syncGoogleSheetRows(rows: SheetRowRaw[]) {
         product_status = excluded.product_status,
         confirmation_mail_status = excluded.confirmation_mail_status,
         script_link = excluded.script_link,
+        script_received_date = excluded.script_received_date,
         script_status = excluded.script_status,
         script_approval_date = excluded.script_approval_date,
         first_draft_status = excluded.first_draft_status,
@@ -816,7 +827,7 @@ export async function syncGoogleSheetRows(rows: SheetRowRaw[]) {
         d.id, d.campaign_id, d.creator_name, d.niche, d.profile_url, d.followers_count, d.category,
         d.city, d.state, d.language, d.gender, d.phone_number, d.deliverables, d.brand_cost, d.creator_cost,
         d.gross_margin, d.address || "", d.product_status, d.confirmation_mail_status, d.script_link || "",
-        d.script_status, d.script_approval_date || "", d.first_draft_status, d.first_draft_date || "",
+        d.script_received_date || "", d.script_status, d.script_approval_date || "", d.first_draft_status, d.first_draft_date || "",
         d.revision_drive_link || "", d.final_video_status, d.video_approval_date || "", d.live_link || "", d.live_date || "",
         d.execution_status, d.total_views, d.likes, d.comments, d.saves, d.shares, d.avg_watch_time,
         d.engagement_rate, d.account_reach, d.screenshots, d.day7_views, d.day7_er, d.day15_views,

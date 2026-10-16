@@ -69,6 +69,7 @@ export interface CreatorDeliverableInternal {
   product_status: ProductStatus;
   confirmation_mail_status: ConfirmationMailStatus;
   script_link?: string;
+  script_received_date?: string;
   script_status: ScriptStatus;
   script_approval_date?: string;
   first_draft_status: DraftStatus;

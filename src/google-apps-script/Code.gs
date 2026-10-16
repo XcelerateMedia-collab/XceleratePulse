@@ -48,12 +48,21 @@ var TARGET_FLOW_TAB = "Flow";
 // Google Drive Folder ID for creator proof screenshots (Paste your folder ID here, or leave empty)
 var DEFAULT_PROOF_FOLDER_ID = ""; 
 
+// Google Drive Root Folder ID for Execution Pipeline ("Xcelerate Media Execution")
+// Contains execution owner folders: Sakshi Singh Execution, Payal Jha Execution, etc.
+var EXECUTION_ROOT_FOLDER_ID = "1pO8KjlqgCVgiPMC2yW2LhwEPHIBU_jyf"; 
+
 
 // Default employee sheets list (used if '⚙️ Employee Sheets' tab is not yet filled)
 var DEFAULT_EMPLOYEE_SHEETS = [
   {
     employee: "Payal",
     sheetId: "17kvysvuctOSTh_1FTEsa_vlsdVELs8rSdqR-R_gJZqI",
+    tabName: "ExecutionSheet"
+  },
+  {
+    employee: "Sonu",
+    sheetId: "1KmH0x63YeN0i-CVO-o_37OcQz3Cj6JKE0mi15qKijP8",
     tabName: "ExecutionSheet"
   }
 ];
@@ -66,6 +75,10 @@ function onOpen() {
   var menu = ui.createMenu("⚡ Xcelerate Pulse")
     .addItem("📥 Pull Employee Data into Flow", "pullAllEmployeeSheetsIntoFlow")
     .addItem("🚀 Sync Flow Sheet to Database", "syncFlowSheetToPlatform")
+    .addSeparator()
+    .addItem("📁 Create Drive Folders for Selected Row(s)", "menuCreateDriveAssetsForSelectedRows")
+    .addItem("⚡ Auto-Create Drive Folders (Next Batch)", "menuAutoCreateDriveAssetsForFlow")
+    .addItem("📤 Push Drive Links to Employee Sheets", "menuPushDriveLinksToEmployeeSheets")
     .addSeparator()
     .addItem("🔧 Fix Duplicate Deliverable IDs", "fixDuplicateFlowSheetIds")
     .addItem("🔍 Audit Sheet Rows (Find 4 Skipped Rows)", "auditFlowSheetRows")
@@ -183,8 +196,8 @@ function setupEmployeeSheetsRegistryTab() {
   if (configSheet.getLastRow() < 2) {
     var sampleRows = [
       ["Payal", "17kvysvuctOSTh_1FTEsa_vlsdVELs8rSdqR-R_gJZqI", "ExecutionSheet", "Active", "Never", 0],
-      ["Tej", "PASTE_TEJ_SHEET_ID_OR_URL_HERE", "ExecutionSheet", "Active", "Never", 0],
-      ["Sonu", "PASTE_SONU_SHEET_ID_OR_URL_HERE", "ExecutionSheet", "Active", "Never", 0]
+      ["Sonu", "1KmH0x63YeN0i-CVO-o_37OcQz3Cj6JKE0mi15qKijP8", "ExecutionSheet", "Active", "Never", 0],
+      ["Tej", "PASTE_TEJ_SHEET_ID_OR_URL_HERE", "ExecutionSheet", "Active", "Never", 0]
     ];
     configSheet.getRange(2, 1, sampleRows.length, 6).setValues(sampleRows);
   }
@@ -449,11 +462,34 @@ function findEmpColumnIndex(fKey, empColMap) {
     if (empColMap["scriptstatus"] !== undefined) return empColMap["scriptstatus"];
   }
 
+  // SCRIPT RECEIVED DATE
+  if (fKey.indexOf("scriptreceived") !== -1 || fKey.indexOf("scriptreceive") !== -1 || fKey === "scriptreceiveddate") {
+    if (empColMap["scriptreceiveddate"] !== undefined) return empColMap["scriptreceiveddate"];
+    if (empColMap["scriptreceived"] !== undefined) return empColMap["scriptreceived"];
+    if (empColMap["scriptreceivedate"] !== undefined) return empColMap["scriptreceivedate"];
+    if (empColMap["scriptrecdate"] !== undefined) return empColMap["scriptrecdate"];
+    if (empColMap["scriptdate"] !== undefined && empColMap["scriptapprovaldate"] !== undefined) {
+      return empColMap["scriptdate"];
+    }
+    for (var ek in empColMap) {
+      if (ek.indexOf("script") !== -1 && (ek.indexOf("rec") !== -1 || ek.indexOf("rcvd") !== -1 || ek.indexOf("receive") !== -1)) {
+        return empColMap[ek];
+      }
+    }
+  }
+
   // SCRIPT APPROVAL DATE
-  if (fKey.indexOf("scriptapproval") !== -1 || fKey === "scriptapprovaldate" || fKey === "scriptdate") {
+  if (fKey.indexOf("scriptapproval") !== -1 || fKey === "scriptapprovaldate") {
     if (empColMap["scriptapprovaldate"] !== undefined) return empColMap["scriptapprovaldate"];
     if (empColMap["scriptapproveddate"] !== undefined) return empColMap["scriptapproveddate"];
-    if (empColMap["scriptdate"] !== undefined) return empColMap["scriptdate"];
+    for (var ek in empColMap) {
+      if (ek.indexOf("script") !== -1 && (ek.indexOf("appr") !== -1 || ek.indexOf("approval") !== -1)) {
+        return empColMap[ek];
+      }
+    }
+    if (empColMap["scriptdate"] !== undefined && empColMap["scriptreceiveddate"] === undefined) {
+      return empColMap["scriptdate"];
+    }
   }
 
   // 1ST DRAFT STATUS (Flow: "videos1stdraftstatus", Employee: "1stdraftstatus")
@@ -1180,7 +1216,31 @@ function pullEmployeeListIntoFlow(employeeList, scopeLabel) {
     }
   }
 
-  // 3. Write ALL updated & appended rows to Flow in ONE single batch write!
+  // 3. Auto-Create Drive Folders & Script Docs for newly added creators ONLY
+  var driveAssetsCreated = 0;
+  if (totalAppended > 0) {
+    try {
+      ss.toast("Step 3/4: Creating Drive folders for " + totalAppended + " new creator(s)...", "⚡ Xcelerate Pulse", 4);
+      var appendedStartIndex = flowData.length - totalAppended;
+      var appendedIndices = [];
+      for (var a = appendedStartIndex; a < flowData.length; a++) {
+        appendedIndices.push(a);
+      }
+      var driveRes = autoCreateDriveAssetsForRows(flowSheet, flowColMap, flowData, {
+        maxRows: 15,
+        maxDurationMs: 45000,
+        writeDirectlyToSheet: false, // will be written in step 4 batch write!
+        onlyIndices: appendedIndices
+      });
+      if (driveRes && driveRes.createdCount > 0) {
+        driveAssetsCreated = driveRes.createdCount;
+      }
+    } catch (driveErr) {
+      Logger.log("Notice: Drive assets generation skipped or error: " + driveErr.toString());
+    }
+  }
+
+  // 4. Write ALL updated & appended rows to Flow in ONE single batch write!
   // CRITICAL: Acquire batch write lock BEFORE writing so onEdit triggers are suppressed
   setBatchWriteLock(true);
   try {
@@ -1191,7 +1251,7 @@ function pullEmployeeListIntoFlow(employeeList, scopeLabel) {
         flowSheet.insertRowsAfter(currentMaxRows, (requiredMaxRows - currentMaxRows) + 30);
       }
 
-      try { ss.toast("Step 3/3: Batch-writing " + flowData.length + " rows to Flow tab...", "⚡ Xcelerate Pulse", 3); } catch (_) {}
+      try { ss.toast("Step 4/4: Batch-writing " + flowData.length + " rows to Flow tab...", "⚡ Xcelerate Pulse", 3); } catch (_) {}
       safeSetRange(flowSheet.getRange(2, 1, flowData.length, flowLastCol), flowData);
     }
 
@@ -1199,6 +1259,15 @@ function pullEmployeeListIntoFlow(employeeList, scopeLabel) {
   } finally {
     // ALWAYS release batch write lock, even if write fails
     setBatchWriteLock(false);
+  }
+
+  // 5. Automatically push any newly created Drive links back to employee sheets
+  if (driveAssetsCreated > 0) {
+    try {
+      syncDriveLinksToEmployeeSheets({ isSilent: true });
+    } catch (pushErr) {
+      Logger.log("Notice: Auto-pushing drive links to employee sheets skipped: " + pushErr.toString());
+    }
   }
 
   // NOTE: We intentionally do NOT auto-push to database here.
@@ -1226,6 +1295,7 @@ function pullEmployeeListIntoFlow(employeeList, scopeLabel) {
   var summaryMsg = "✅ Flow Sheet Updated!\n\n" +
     "• Rows Updated: " + totalUpdated + "\n" +
     "• New Rows / Creators Added: " + totalAppended + "\n" +
+    (driveAssetsCreated > 0 ? ("• Drive Folders & Script Docs Created: " + driveAssetsCreated + "\n") : "") +
     "• Total Deliverables Processed: " + (totalUpdated + totalAppended) + "\n" +
     newCreatorsSummary;
 
@@ -1803,6 +1873,8 @@ function handleRemoteApiRequest(e) {
         webhookDelivered: syncRes ? syncRes.webhookDelivered : false,
         message: "Extracted and synchronized " + recCount + " deliverables from Flow sheet."
       };
+    } else if (action === "create_drive_assets" || action === "generate_drive_folders") {
+      output = menuAutoCreateDriveAssetsForFlow(true);
     } else if (action === "fix_duplicate_ids" || action === "deduplicate_ids") {
       output = fixDuplicateFlowSheetIds();
     } else if (action === "get_flow_rows" || action === "read_flow" || action === "compare_flow") {
@@ -2139,4 +2211,1185 @@ function fixDuplicateFlowSheetIds() {
     message: msg
   };
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AUTOMATED GOOGLE DRIVE FOLDER & SCRIPT DOC ENGINE
+// Creates: Execution Owner Folder ➔ Campaign Folder ➔ Creator Folder ➔ Script Doc + Video Drafts Folder
+// High Performance: In-memory folder indexing, incremental cell updates, time guards & selected rows support.
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Returns effective root folder for Execution Pipeline ("Xcelerate Media Execution")
+ */
+/**
+ * Returns effective root folder for Execution Pipeline ("Xcelerate Media Execution")
+ * Strictly resolves inside "Xcelerate Media Pipeline" > "Xcelerate Media Execution"
+ * to ensure owner folders are NEVER created in bare My Drive!
+ */
+function getEffectiveExecutionRootFolder() {
+  var targetFolderName = "Xcelerate Media Execution";
+  var parentFolderName = "Xcelerate Media Pipeline";
+
+  // 1. Try direct Folder ID first
+  var folderId = "1pO8KjlqgCVgiPMC2yW2LhwEPHIBU_jyf";
+  try {
+    var stored = PropertiesService.getScriptProperties().getProperty("EXECUTION_ROOT_FOLDER_ID");
+    if (stored && stored.trim()) folderId = stored.trim();
+  } catch (_) {}
+
+  if (folderId) {
+    try {
+      var f = DriveApp.getFolderById(folderId);
+      if (f && f.getName() && f.getName().toLowerCase().indexOf("execution") !== -1) {
+        return f;
+      }
+    } catch (e) {
+      Logger.log("DriveApp.getFolderById(" + folderId + ") warning: " + e.toString());
+    }
+  }
+
+  // 2. Find "Xcelerate Media Pipeline" in My Drive
+  var pipelineFolder = null;
+  try {
+    var pfIter = DriveApp.getFoldersByName(parentFolderName);
+    if (pfIter.hasNext()) {
+      pipelineFolder = pfIter.next();
+    } else {
+      var mySubs = DriveApp.getRootFolder().getFolders();
+      while (mySubs.hasNext()) {
+        var sub = mySubs.next();
+        if (sub.getName().toLowerCase().indexOf("pipeline") !== -1) {
+          pipelineFolder = sub;
+          break;
+        }
+      }
+    }
+  } catch (e) {
+    Logger.log("Pipeline search error: " + e.toString());
+  }
+
+  // If pipeline folder doesn't exist, create it in My Drive
+  if (!pipelineFolder) {
+    try {
+      pipelineFolder = DriveApp.getRootFolder().createFolder(parentFolderName);
+    } catch (_) {
+      pipelineFolder = DriveApp.getRootFolder();
+    }
+  }
+
+  // 3. Find or create "Xcelerate Media Execution" inside "Xcelerate Media Pipeline"
+  try {
+    var efIter = pipelineFolder.getFoldersByName(targetFolderName);
+    if (efIter.hasNext()) {
+      var execFolder = efIter.next();
+      try { PropertiesService.getScriptProperties().setProperty("EXECUTION_ROOT_FOLDER_ID", execFolder.getId()); } catch (_) {}
+      return execFolder;
+    }
+
+    var pSubs = pipelineFolder.getFolders();
+    while (pSubs.hasNext()) {
+      var pfSub = pSubs.next();
+      if (pfSub.getName().toLowerCase().indexOf("execution") !== -1) {
+        try { PropertiesService.getScriptProperties().setProperty("EXECUTION_ROOT_FOLDER_ID", pfSub.getId()); } catch (_) {}
+        return pfSub;
+      }
+    }
+
+    var newExecFolder = pipelineFolder.createFolder(targetFolderName);
+    try { PropertiesService.getScriptProperties().setProperty("EXECUTION_ROOT_FOLDER_ID", newExecFolder.getId()); } catch (_) {}
+    return newExecFolder;
+  } catch (err) {
+    Logger.log("Error resolving execution folder inside pipeline: " + err.toString());
+  }
+
+  return pipelineFolder;
+}
+
+/**
+ * Resolves a column index from flowColMap by an array of pattern keys.
+ * Prioritizes exact matches, then substring matches in pattern order.
+ */
+function findFlowColIndexByKeys(flowColMap, keyPatterns) {
+  if (!flowColMap) return undefined;
+  // 1. Exact match first
+  for (var i = 0; i < keyPatterns.length; i++) {
+    var p = keyPatterns[i];
+    if (flowColMap[p] !== undefined) return flowColMap[p];
+  }
+  // 2. Substring match, ordered by pattern priority
+  for (var i = 0; i < keyPatterns.length; i++) {
+    var p = keyPatterns[i];
+    for (var k in flowColMap) {
+      if (k.indexOf(p) !== -1) {
+        // Special safety check for script column matching: never match status, date, or approval columns
+        if (p.indexOf("script") !== -1 && (k.indexOf("status") !== -1 || k.indexOf("date") !== -1 || k.indexOf("rec") !== -1 || k.indexOf("appr") !== -1)) {
+          continue;
+        }
+        return flowColMap[k];
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Accurately finds the Script Link column index (e.g. Column Z "Script link").
+ * Strictly avoids false-positive matches with "Script Received Date", "Script Status", or "Script Approval Date".
+ */
+function findScriptColIndex(colMap) {
+  if (!colMap) return undefined;
+  var exactKeys = [
+    "scriptlink", "scripturl", "scriptdoclink", "scriptgoogledoclink",
+    "scriptdrivelink", "scriptdocurl", "scriptdoc", "scriptfilelink", "scriptfile"
+  ];
+  for (var i = 0; i < exactKeys.length; i++) {
+    if (colMap[exactKeys[i]] !== undefined) return colMap[exactKeys[i]];
+  }
+  // Substring search strictly excluding status, date, receive, approval
+  for (var k in colMap) {
+    if (k.indexOf("script") !== -1) {
+      if (k.indexOf("status") === -1 && k.indexOf("date") === -1 && k.indexOf("rec") === -1 && k.indexOf("appr") === -1) {
+        if (k.indexOf("link") !== -1 || k.indexOf("url") !== -1 || k.indexOf("doc") !== -1 || k.indexOf("drive") !== -1 || k === "script") {
+          return colMap[k];
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Pre-indexes all Execution Owner subfolders inside the root folder in a SINGLE query.
+ * Matches: "Sakshi Singh Execution", "Payal Jha Execution", "Sonu Jha Execution", "Tej Prakash Execution", etc.
+ */
+function buildRootFolderIndex(rootFolder) {
+  var cache = {};
+  if (!rootFolder) return cache;
+  try {
+    var subFolders = rootFolder.getFolders();
+    while (subFolders.hasNext()) {
+      var f = subFolders.next();
+      var fName = f.getName();
+      var fLower = fName.toLowerCase();
+      cache[fLower] = f;
+      // Map without "execution" suffix, e.g. "sakshi singh" -> folder
+      var withoutSuffix = fLower.replace(/\s*execution\s*/g, "").trim();
+      if (withoutSuffix) cache[withoutSuffix] = f;
+      // Map first word, e.g. "sakshi" -> folder, "payal" -> folder, "sonu" -> folder, "tej" -> folder
+      var firstWord = withoutSuffix.split(/\s+/)[0];
+      if (firstWord && firstWord.length >= 3 && !cache[firstWord]) {
+        cache[firstWord] = f;
+      }
+    }
+  } catch (err) {
+    Logger.log("buildRootFolderIndex error: " + err.toString());
+  }
+  return cache;
+}
+
+/**
+ * Gets or creates the Execution Owner's folder inside "Xcelerate Media Execution"
+ * Uses fast in-memory index to avoid redundant Drive API roundtrips.
+ */
+function getExecutionOwnerFolder(rootFolder, ownerName, ownerIndex) {
+  if (!rootFolder) return null;
+  var cleanOwner = String(ownerName || "").trim();
+  if (!cleanOwner) cleanOwner = "Team Execution";
+  var lowerOwner = cleanOwner.toLowerCase();
+  var firstWord = lowerOwner.split(/\s+/)[0];
+
+  // 1. Fast in-memory index lookup (0 ms)
+  if (ownerIndex) {
+    if (ownerIndex[lowerOwner]) return ownerIndex[lowerOwner];
+    if (firstWord && firstWord.length >= 3 && ownerIndex[firstWord]) return ownerIndex[firstWord];
+  }
+
+  // 2. Direct name match
+  var targetName = lowerOwner.indexOf("execution") !== -1 ? cleanOwner : cleanOwner + " Execution";
+  var exactFolders = rootFolder.getFoldersByName(targetName);
+  if (exactFolders.hasNext()) {
+    var f = exactFolders.next();
+    if (ownerIndex) {
+      ownerIndex[lowerOwner] = f;
+      if (firstWord) ownerIndex[firstWord] = f;
+    }
+    return f;
+  }
+
+  // 3. Create folder if not found
+  try {
+    var newFolder = rootFolder.createFolder(targetName);
+    if (ownerIndex) {
+      ownerIndex[lowerOwner] = newFolder;
+      if (firstWord) ownerIndex[firstWord] = newFolder;
+    }
+    return newFolder;
+  } catch (err) {
+    Logger.log("Error creating owner folder " + targetName + ": " + err.toString());
+    return rootFolder;
+  }
+}
+
+/**
+ * Gets or creates a sanitized subfolder inside a parent folder
+ */
+function getOrCreateSubFolder(parentFolder, name) {
+  if (!parentFolder) return null;
+  var cleanName = String(name || "").replace(/[\/\\:*?"<>|]/g, " ").trim();
+  if (!cleanName) cleanName = "Untitled";
+
+  try {
+    var folders = parentFolder.getFoldersByName(cleanName);
+    if (folders.hasNext()) {
+      return folders.next();
+    }
+    return parentFolder.createFolder(cleanName);
+  } catch (err) {
+    Logger.log("Error in getOrCreateSubFolder (" + cleanName + "): " + err.toString());
+    return null;
+  }
+}
+
+/**
+ * Creates or retrieves a Google Doc for the creator's script inside the creator's folder.
+ * Creates ONLY native Google Docs (never .txt files) and automatically trashes any stray .txt files.
+ */
+/**
+ * Reliably guarantees that a file is placed inside targetFolder.
+ * Uses a robust relocation ladder (moveTo -> addFile -> makeCopy fallback)
+ * to work smoothly across both personal My Drive and organization/shared drive hierarchies.
+ */
+function ensureFileInsideFolder(file, targetFolder, fileName) {
+  if (!file || !targetFolder) return file;
+  
+  // 1. Verify if file is already inside targetFolder
+  try {
+    var parents = file.getParents();
+    while (parents.hasNext()) {
+      if (parents.next().getId() === targetFolder.getId()) {
+        return file;
+      }
+    }
+  } catch (_) {}
+
+  // 2. Strategy A: Try native moveTo
+  var moved = false;
+  try {
+    file.moveTo(targetFolder);
+    moved = true;
+  } catch (e1) {
+    Logger.log("moveTo strategy failed: " + e1.toString());
+  }
+
+  // 3. Strategy B: Try targetFolder.addFile
+  if (!moved) {
+    try {
+      targetFolder.addFile(file);
+      moved = true;
+    } catch (e2) {
+      Logger.log("addFile strategy failed: " + e2.toString());
+    }
+  }
+
+  // 4. Strategy C: Try makeCopy directly into targetFolder & trash original
+  if (!moved) {
+    try {
+      var copy = file.makeCopy(fileName || file.getName(), targetFolder);
+      if (copy) {
+        try { file.setTrashed(true); } catch (_) {}
+        return copy;
+      }
+    } catch (e3) {
+      Logger.log("makeCopy strategy failed: " + e3.toString());
+    }
+  }
+
+  // 5. Clean up from root My Drive if file now exists in targetFolder
+  try {
+    DriveApp.getRootFolder().removeFile(file);
+  } catch (_) {}
+
+  return file;
+}
+
+/**
+ * Creates or retrieves a Google Doc for the creator's script inside the creator's folder.
+ * Creates ONLY native Google Docs (never .txt files) and automatically trashes any stray .txt files.
+ * Relocates any stray script files from My Drive into creatorFolder and guarantees the doc is inside creatorFolder.
+ */
+function getOrCreateScriptDoc(creatorFolder, creatorName, campaignName, ownerName, brandName) {
+  if (!creatorFolder) return "";
+  var cleanName = String(creatorName || "").replace(/[\/\\:*?"<>|]/g, " ").trim();
+  if (!cleanName) cleanName = "Creator";
+  var docTitle = cleanName + " - Script";
+
+  var safeBrand = String(brandName || "").trim() || "General Brand";
+  var safeCamp = String(campaignName || "").trim() || "General Campaign";
+  var safeOwner = String(ownerName || "").trim() || "Team Xcelerate";
+
+  try {
+    // 1. Clean up any stray or legacy .txt script files in this creator folder
+    try {
+      var allFiles = creatorFolder.getFiles();
+      while (allFiles.hasNext()) {
+        var file = allFiles.next();
+        var fName = file.getName().toLowerCase();
+        if (fName.indexOf(cleanName.toLowerCase()) !== -1 && fName.indexOf("script") !== -1 && fName.endsWith(".txt")) {
+          file.setTrashed(true);
+        }
+      }
+    } catch (_) {}
+
+    // 2. Check if a valid, readable Google Doc ALREADY exists in creatorFolder
+    var existingFiles = creatorFolder.getFilesByName(docTitle);
+    while (existingFiles.hasNext()) {
+      var ef = existingFiles.next();
+      var mType = ef.getMimeType();
+      if (mType === MimeType.GOOGLE_DOCS || mType === "application/vnd.google-apps.document" || ef.getName() === docTitle) {
+        try {
+          var testDoc = DocumentApp.openById(ef.getId());
+          if (testDoc) {
+            return ef.getUrl();
+          }
+        } catch (openErr) {
+          try { ef.setTrashed(true); } catch (_) {}
+        }
+      }
+    }
+
+    // Secondary check: look for any readable Google Doc whose title contains "Script" inside creatorFolder
+    var allFilesCheck = creatorFolder.getFiles();
+    while (allFilesCheck.hasNext()) {
+      var gf = allFilesCheck.next();
+      var gfName = gf.getName().toLowerCase();
+      var gfMime = gf.getMimeType();
+      if ((gfMime === MimeType.GOOGLE_DOCS || gfMime === "application/vnd.google-apps.document") &&
+          gfName.indexOf("script") !== -1 && gfName.indexOf(cleanName.toLowerCase()) !== -1) {
+        try {
+          var testGf = DocumentApp.openById(gf.getId());
+          if (testGf) return gf.getUrl();
+        } catch (_) {}
+      }
+    }
+
+    // 3. Check if the script file is currently sitting OUTSIDE creatorFolder (e.g. in root My Drive or parent Brand folder)
+    var strayFile = null;
+    try {
+      var rootFiles = DriveApp.getRootFolder().getFilesByName(docTitle);
+      while (rootFiles.hasNext()) {
+        var rf = rootFiles.next();
+        if (rf.getMimeType() === MimeType.GOOGLE_DOCS || rf.getMimeType() === "application/vnd.google-apps.document" || rf.getName() === docTitle) {
+          strayFile = rf;
+          break;
+        }
+      }
+      if (!strayFile) {
+        var parentIter = creatorFolder.getParents();
+        if (parentIter.hasNext()) {
+          var pFolder = parentIter.next();
+          var pFiles = pFolder.getFilesByName(docTitle);
+          if (pFiles.hasNext()) {
+            strayFile = pFiles.next();
+          }
+        }
+      }
+    } catch (_) {}
+
+    // If an existing script doc is sitting outside, MOVE IT DIRECTLY INTO creatorFolder!
+    if (strayFile) {
+      strayFile = ensureFileInsideFolder(strayFile, creatorFolder, docTitle);
+      var verifyStray = creatorFolder.getFilesByName(docTitle);
+      if (verifyStray.hasNext()) {
+        return verifyStray.next().getUrl();
+      }
+      return strayFile.getUrl();
+    }
+
+    // 4. Create native Google Doc directly with full content structure
+    var doc = DocumentApp.create(docTitle);
+    var createdFileId = doc.getId();
+
+    var body = doc.getBody();
+    body.clear();
+
+    var titlePara = body.insertParagraph(0, cleanName + " — Script Document");
+    titlePara.setHeading(DocumentApp.ParagraphHeading.HEADING_1);
+
+    var nowFormatted = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Kolkata", "dd MMM yyyy");
+    var metaText = "Brand / Agency: " + safeBrand + "\n" +
+                   "Campaign: " + safeCamp + "\n" +
+                   "Creator: " + cleanName + "\n" +
+                   "Execution Owner: " + safeOwner + "\n" +
+                   "Date Generated: " + nowFormatted + "\n" +
+                   "Status: Script Pending";
+    var metaPara = body.appendParagraph(metaText);
+    metaPara.setItalic(true);
+
+    body.appendParagraph("═══════════════════════════════════════════════════════════════════════\n");
+    body.appendParagraph("1. CONCEPT & HOOK (Opening 3 Seconds):\n[Insert visual hook & dialogue here]\n\n");
+    body.appendParagraph("2. SCENE-BY-SCENE FLOW / SCRIPT:\n[Insert dialogue, actions, and text overlays]\n\n");
+    body.appendParagraph("3. CALL TO ACTION (CTA) & CAPTION:\n[Insert brand offer, discount codes, tags, hashtags]\n\n");
+
+    doc.saveAndClose();
+    Utilities.sleep(500);
+
+    // 5. Relocate newly created doc directly into creatorFolder
+    var createdDocFile = DriveApp.getFileById(createdFileId);
+    createdDocFile = ensureFileInsideFolder(createdDocFile, creatorFolder, docTitle);
+
+    // Verify it is inside creatorFolder
+    var finalCheck = creatorFolder.getFilesByName(docTitle);
+    if (finalCheck.hasNext()) {
+      return finalCheck.next().getUrl();
+    }
+
+    return createdDocFile ? createdDocFile.getUrl() : ("https://docs.google.com/document/d/" + createdFileId + "/edit");
+  } catch (err) {
+    Logger.log("getOrCreateScriptDoc error for " + creatorName + ": " + err.toString());
+    try {
+      var lastCheck = creatorFolder.getFilesByName(docTitle);
+      if (lastCheck.hasNext()) return lastCheck.next().getUrl();
+    } catch (_) {}
+    return "";
+  }
+}
+
+/**
+ * Creates or retrieves the "Video Draft" / "Video Revised" folder inside creator's folder
+ */
+function getOrCreateVideoRevisedFolder(creatorFolder) {
+  if (!creatorFolder) return "";
+  var folderNames = ["Video Draft", "Video Revised", "Video Drafts", "Video Revisions", "Drafts"];
+  try {
+    for (var i = 0; i < folderNames.length; i++) {
+      var subFolders = creatorFolder.getFoldersByName(folderNames[i]);
+      if (subFolders.hasNext()) {
+        return subFolders.next().getUrl();
+      }
+    }
+    var draftFolder = creatorFolder.createFolder("Video Draft");
+    return draftFolder.getUrl();
+  } catch (err) {
+    Logger.log("getOrCreateVideoRevisedFolder error: " + err.toString());
+    return "";
+  }
+}
+var getOrCreateVideoDraftFolder = getOrCreateVideoRevisedFolder;
+var getOrCreateVideoDraftsFolder = getOrCreateVideoRevisedFolder;
+
+/**
+ * Creates or retrieves the "Screenshots" folder inside creator's folder for screenshots of their live video
+ */
+function getOrCreateScreenshotsFolder(creatorFolder) {
+  if (!creatorFolder) return "";
+  var folderNames = ["Screenshots", "Live Video Screenshots", "Proof Screenshots"];
+  try {
+    for (var i = 0; i < folderNames.length; i++) {
+      var subFolders = creatorFolder.getFoldersByName(folderNames[i]);
+      if (subFolders.hasNext()) {
+        return subFolders.next().getUrl();
+      }
+    }
+    var screenshotsFolder = creatorFolder.createFolder("Screenshots");
+    return screenshotsFolder.getUrl();
+  } catch (err) {
+    Logger.log("getOrCreateScreenshotsFolder error: " + err.toString());
+    return "";
+  }
+}
+
+/**
+ * Core Batch Engine: Iterates rows, checks if Script link or Revision Drive link is missing,
+ * creates Drive hierarchy: Execution Owner ➔ Brand/Agency ➔ Creator ➔ (Script Doc, Video Draft, Screenshots)
+ * 
+ * Options:
+ * - maxRows: Maximum rows to process in this run (prevents timeout, defaults to 25)
+ * - maxDurationMs: Maximum execution time before returning (defaults to 150000 ms / 2.5 mins)
+ * - writeDirectlyToSheet: If true, updates cells in sheet incrementally so progress is NEVER lost!
+ * - startRowOffset: 1-based sheet row for flowDataRows[0] (defaults to 2)
+ * - onlyIndices: Specific array of row indices to process (e.g. for selected rows or newly appended rows)
+ * - isForced: If true, forces generation of any missing folder/doc inside creator folder and overwrites sheet cells
+ */
+function autoCreateDriveAssetsForRows(flowSheet, flowColMap, flowDataRows, options) {
+  options = options || {};
+  var maxRows = options.maxRows !== undefined ? options.maxRows : 25;
+  var maxDurationMs = options.maxDurationMs || 150000;
+  var writeDirectly = options.writeDirectlyToSheet === true;
+  var startRowOffset = options.startRowOffset || 2;
+  var onlyIndices = options.onlyIndices || null;
+  var isForced = options.isForced === true;
+
+  var startTime = new Date().getTime();
+
+  var creatorCol = findFlowColIndexByKeys(flowColMap, [
+    "creatorname", "creator", "creatorsname", "influencername", "creatornameinfluencername"
+  ]);
+  var brandCol = findFlowColIndexByKeys(flowColMap, [
+    "brandagencyname", "brandname", "agencyname", "brand", "agency", "brandagency"
+  ]);
+  var campCol = findFlowColIndexByKeys(flowColMap, [
+    "campaignname", "briefname", "brief", "campaignbrief", "campaign"
+  ]);
+  var ownerCol = findFlowColIndexByKeys(flowColMap, [
+    "xceleratepoc", "executionowner", "poc", "owner", "executionpoc"
+  ]);
+  var scriptCol = findScriptColIndex(flowColMap);
+  if (!scriptCol) {
+    scriptCol = findFlowColIndexByKeys(flowColMap, [
+      "scriptlink", "scripturl", "scriptdoclink", "scriptgoogledoclink", "scriptdrivelink", "scriptdoc"
+    ]);
+  }
+  var draftCol = findFlowColIndexByKeys(flowColMap, [
+    "revisionreshootfreqdrivelink", "revisionreshootdrivelink", "revisiondrivelink", "revisionlink",
+    "reshootdrivelink", "reshootlink", "videodraftlink", "videodraft", "draftlink", "drivelink",
+    "draftdrivelink", "videorevisedlink", "videorevised", "1stdraftlink", "firstdraftlink"
+  ]);
+  var screenshotCol = findFlowColIndexByKeys(flowColMap, [
+    "screenshots", "screenshot", "proof", "reelscreenshot", "insightsscreenshot", "performancescreenshot", "prooflink", "livescreenshot"
+  ]);
+
+  if (!creatorCol) {
+    Logger.log("Creator column not found in sheet.");
+    return { createdCount: 0, skippedCount: 0, stoppedEarly: false, totalToProcess: 0, remainingCount: 0 };
+  }
+
+  var rootFolder = getEffectiveExecutionRootFolder();
+  if (!rootFolder) {
+    Logger.log("Execution root folder could not be found or opened.");
+    return { createdCount: 0, skippedCount: 0, stoppedEarly: false, totalToProcess: 0, remainingCount: 0 };
+  }
+
+  // Pre-index existing owner folders in root in ONE query!
+  var ownerIndex = buildRootFolderIndex(rootFolder);
+  var brandCache = {};
+  var creatorCache = {};
+
+  var createdCount = 0;
+  var skippedCount = 0;
+  var stoppedEarly = false;
+  var totalToProcess = 0;
+
+  var indicesToIterate = [];
+  if (onlyIndices && onlyIndices.length > 0) {
+    indicesToIterate = onlyIndices;
+  } else {
+    for (var i = 0; i < flowDataRows.length; i++) {
+      indicesToIterate.push(i);
+    }
+  }
+
+  // Count creators to process
+  for (var k = 0; k < indicesToIterate.length; k++) {
+    var idx = indicesToIterate[k];
+    var rData = flowDataRows[idx];
+    if (!rData) continue;
+    var cName = creatorCol ? String(rData[creatorCol - 1] || "").trim() : "";
+    if (!cName) continue;
+    totalToProcess++;
+  }
+
+  for (var k = 0; k < indicesToIterate.length; k++) {
+    var r = indicesToIterate[k];
+    var row = flowDataRows[r];
+    if (!row) continue;
+
+    var creatorName = creatorCol ? String(row[creatorCol - 1] || "").trim() : "";
+    if (!creatorName) continue;
+
+    var scriptLink = scriptCol ? String(row[scriptCol - 1] || "").trim() : "";
+    var draftLink = draftCol ? String(row[draftCol - 1] || "").trim() : "";
+    var screenshotLink = screenshotCol ? String(row[screenshotCol - 1] || "").trim() : "";
+
+    var hasScript = scriptLink && scriptLink.indexOf("http") !== -1;
+    var hasDraft = draftLink && draftLink.indexOf("http") !== -1;
+    var hasScreenshot = !screenshotCol || (screenshotLink && screenshotLink.indexOf("http") !== -1);
+
+    // If NOT forced run, and row ALREADY has all links pointing to drive/docs, skip
+    if (!isForced && hasScript && hasDraft && hasScreenshot) {
+      skippedCount++;
+      continue;
+    }
+
+    // Check batch limit & time guard
+    var elapsed = new Date().getTime() - startTime;
+    if (createdCount >= maxRows || elapsed >= maxDurationMs) {
+      stoppedEarly = true;
+      break;
+    }
+
+    var ownerName = ownerCol ? String(row[ownerCol - 1] || "").trim() : "";
+    if (!ownerName) ownerName = "Team Execution";
+
+    var campName = campCol ? String(row[campCol - 1] || "").trim() : "";
+    if (!campName) campName = "General Campaign";
+
+    var brandName = brandCol ? String(row[brandCol - 1] || "").trim() : "";
+    if (!brandName) {
+      brandName = campName ? (campName.split(/\s+|-|_/)[0] || "General Brand") : "General Brand";
+    }
+
+    var cleanBrandKey = brandName.toLowerCase().replace(/[^a-z0-9]/g, "");
+    var cleanCrKey = creatorName.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+    // 1. Get or create Execution Owner Folder (e.g. "Sakshi Singh Execution", "Payal Jha Execution")
+    var ownerFolder = getExecutionOwnerFolder(rootFolder, ownerName, ownerIndex);
+    if (!ownerFolder) continue;
+
+    // 2. Get or create Brand/Agency Folder directly inside Execution Owner Folder (e.g. "Bioyug", "Adani", "Barcode")
+    var brandKey = ownerFolder.getId() + "_" + cleanBrandKey;
+    var brandFolder = brandCache[brandKey];
+    if (!brandFolder) {
+      brandFolder = getOrCreateSubFolder(ownerFolder, brandName);
+      if (brandFolder) brandCache[brandKey] = brandFolder;
+    }
+    if (!brandFolder) continue;
+
+    // 3. Get or create Creator Folder directly inside Brand/Agency Folder (e.g. "Charvi")
+    var crKey = brandFolder.getId() + "_" + cleanCrKey;
+    var crFolder = creatorCache[crKey];
+    if (!crFolder) {
+      crFolder = getOrCreateSubFolder(brandFolder, creatorName);
+      if (crFolder) creatorCache[crKey] = crFolder;
+    }
+    if (!crFolder) continue;
+
+    var rowModified = false;
+
+    // 4. ALWAYS ensure Script Google Doc exists inside Creator Folder!
+    var docUrl = getOrCreateScriptDoc(crFolder, creatorName, campName, ownerName, brandName);
+    if (docUrl && scriptCol) {
+      var currentScript = String(row[scriptCol - 1] || "").trim();
+      if (!currentScript || currentScript !== docUrl || isForced) {
+        row[scriptCol - 1] = docUrl;
+        rowModified = true;
+        if (writeDirectly && flowSheet) {
+          try {
+            flowSheet.getRange(r + startRowOffset, scriptCol).setValue(docUrl);
+          } catch (_) {}
+        }
+      }
+    }
+
+    // 5. ALWAYS ensure Video Draft Folder exists inside Creator Folder!
+    var draftFolderUrl = getOrCreateVideoRevisedFolder(crFolder);
+    if (draftFolderUrl && draftCol) {
+      var currentDraft = String(row[draftCol - 1] || "").trim();
+      if (!currentDraft || currentDraft !== draftFolderUrl || isForced) {
+        row[draftCol - 1] = draftFolderUrl;
+        rowModified = true;
+        if (writeDirectly && flowSheet) {
+          try {
+            flowSheet.getRange(r + startRowOffset, draftCol).setValue(draftFolderUrl);
+          } catch (_) {}
+        }
+      }
+    }
+
+    // 6. ALWAYS ensure Screenshots Folder exists inside Creator Folder!
+    var screenshotFolderUrl = getOrCreateScreenshotsFolder(crFolder);
+    if (screenshotFolderUrl && screenshotCol) {
+      var currentScreenshot = String(row[screenshotCol - 1] || "").trim();
+      if (!currentScreenshot || currentScreenshot !== screenshotFolderUrl || isForced) {
+        row[screenshotCol - 1] = screenshotFolderUrl;
+        rowModified = true;
+        if (writeDirectly && flowSheet) {
+          try {
+            flowSheet.getRange(r + startRowOffset, screenshotCol).setValue(screenshotFolderUrl);
+          } catch (_) {}
+        }
+      }
+    }
+
+    createdCount++;
+    if (writeDirectly && rowModified) {
+      SpreadsheetApp.flush();
+    }
+  }
+
+  if (writeDirectly) {
+    SpreadsheetApp.flush();
+  }
+
+  var remainingCount = Math.max(0, totalToProcess - createdCount);
+  return {
+    createdCount: createdCount,
+    skippedCount: skippedCount,
+    stoppedEarly: stoppedEarly,
+    totalToProcess: totalToProcess,
+    remainingCount: remainingCount
+  };
+}
+
+/**
+ * Toolbar Action: Creates Drive assets ONLY for currently selected rows in the active sheet.
+ * Super fast (1-3 seconds per row), instant cell update, zero timeout risk!
+ * Works on BOTH the 'Flow' tab and any Employee tab!
+ */
+function menuCreateDriveAssetsForSelectedRows() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getActiveSheet();
+  var range = sheet.getActiveRange();
+  if (!range) {
+    SpreadsheetApp.getUi().alert("Please highlight the row(s) you want to create folders for.");
+    return;
+  }
+
+  var startRow = range.getRow();
+  var numRows = range.getNumRows();
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+
+  if (startRow <= 1 && numRows === 1) {
+    SpreadsheetApp.getUi().alert("Row 1 is the header row. Please select one or more creator rows below header.");
+    return;
+  }
+
+  var actualStartRow = Math.max(2, startRow);
+  var actualEndRow = Math.min(lastRow, startRow + numRows - 1);
+  var actualCount = actualEndRow - actualStartRow + 1;
+
+  if (actualCount <= 0) {
+    SpreadsheetApp.getUi().alert("No valid creator rows selected.");
+    return;
+  }
+
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var colMap = {};
+  for (var c = 0; c < headers.length; c++) {
+    var h = String(headers[c] || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (h) colMap[h] = c + 1;
+  }
+
+  var creatorCol = findFlowColIndexByKeys(colMap, [
+    "creatorname", "creator", "creatorsname", "influencername", "creatornameinfluencername"
+  ]);
+  if (!creatorCol) {
+    SpreadsheetApp.getUi().alert("Could not find 'Creator Name' column in this sheet ('" + sheet.getName() + "').");
+    return;
+  }
+
+  var rowsData = sheet.getRange(actualStartRow, 1, actualCount, lastCol).getValues();
+
+  try {
+    ss.toast("Ensuring Drive folders, Script Doc & Video Draft for " + actualCount + " selected row(s)...", "⚡ Xcelerate Pulse", 5);
+  } catch (_) {}
+
+  var res = autoCreateDriveAssetsForRows(sheet, colMap, rowsData, {
+    maxRows: 50,
+    maxDurationMs: 180000,
+    writeDirectlyToSheet: true,
+    startRowOffset: actualStartRow,
+    isForced: true
+  });
+
+  if (res.createdCount > 0) {
+    // Automatically push newly created links into Employee Sheet(s)!
+    var empSyncRes = null;
+    try {
+      empSyncRes = syncDriveLinksToEmployeeSheets({ isSilent: true });
+    } catch (_) {}
+
+    var empNote = "";
+    if (empSyncRes && empSyncRes.totalCellsUpdated > 0) {
+      empNote = "\n• Also populated " + empSyncRes.totalCellsUpdated + " link(s) directly into Employee Execution Sheet(s)!";
+    }
+
+    SpreadsheetApp.getUi().alert(
+      "📁 Drive Creation Complete!",
+      "Successfully created & verified Drive assets for " + res.createdCount + " creator(s)!\n\n" +
+      "• Hierarchy: Xcelerate Media Pipeline > Xcelerate Media Execution > [Owner] > [Brand/Agency] > [Creator]\n" +
+      "• Script Document: [Creator Name] - Script (Google Doc)\n" +
+      "• Video Draft Folder: Video Draft (Folder)\n" +
+      "• Screenshots Folder: Screenshots (Folder)\n\n" +
+      "Links have been saved directly into your sheet cells!" + empNote,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  } else {
+    SpreadsheetApp.getUi().alert(
+      "📁 Drive Status",
+      "No creator rows were processed. Please check your selection and try again.",
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  }
+}
+
+/**
+ * Toolbar Action: Batch auto-creates Drive assets for Flow tab with safe batch limit & time guard.
+ * Saves immediately after each row so progress is NEVER lost!
+ */
+function menuAutoCreateDriveAssetsForFlow(isSilent) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var flowSheet = ss.getSheetByName(TARGET_FLOW_TAB);
+  if (!flowSheet) {
+    if (!isSilent) SpreadsheetApp.getUi().alert("Could not find '" + TARGET_FLOW_TAB + "' sheet.");
+    return { success: false, error: "Tab '" + TARGET_FLOW_TAB + "' not found." };
+  }
+
+  var lastRow = flowSheet.getLastRow();
+  var lastCol = flowSheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) {
+    if (!isSilent) SpreadsheetApp.getUi().alert("No data rows found in '" + TARGET_FLOW_TAB + "'.");
+    return { success: false, error: "No data rows in Flow." };
+  }
+
+  var flowHeaders = flowSheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var flowColMap = {};
+  for (var c = 0; c < flowHeaders.length; c++) {
+    var hName = String(flowHeaders[c] || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (hName) flowColMap[hName] = c + 1;
+  }
+
+  if (!isSilent) {
+    try { ss.toast("Scanning Flow tab for creators missing Drive assets...", "⚡ Xcelerate Pulse", 4); } catch (_) {}
+  }
+
+  var flowData = flowSheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+
+  var res = autoCreateDriveAssetsForRows(flowSheet, flowColMap, flowData, {
+    maxRows: 25,
+    maxDurationMs: 150000,
+    writeDirectlyToSheet: true,
+    startRowOffset: 2,
+    isForced: false
+  });
+
+  if (res.createdCount > 0) {
+    // Automatically push newly created links into Employee Sheets!
+    var empSyncRes = null;
+    try {
+      empSyncRes = syncDriveLinksToEmployeeSheets({ isSilent: true });
+    } catch (_) {}
+
+    if (!isSilent) {
+      var msg = "Successfully verified & created Drive assets for " + res.createdCount + " creator(s)!\n\n" +
+                "• Path: Xcelerate Media Pipeline > Xcelerate Media Execution > [Owner] > [Brand/Agency] > [Creator]\n" +
+                "• All links saved directly to your Flow sheet.\n";
+      if (empSyncRes && empSyncRes.totalCellsUpdated > 0) {
+        msg += "• Populated " + empSyncRes.totalCellsUpdated + " link(s) directly into Employee Execution Sheet(s)!\n";
+      }
+      if (res.remainingCount > 0) {
+        msg += "• Remaining creators missing links: " + res.remainingCount + ".\n\n" +
+               "👉 Click 'Auto-Create Drive Folders (Next Batch)' to process the next batch of 25, or highlight rows and use 'Create Drive Folders for Selected Row(s)'!";
+      } else {
+        msg += "🎉 All creators in Flow are now fully linked!";
+      }
+
+      SpreadsheetApp.getUi().alert(
+        "📁 Drive Automation Complete!",
+        msg,
+        SpreadsheetApp.getUi().ButtonSet.OK
+      );
+    }
+    return { success: true, createdCount: res.createdCount, remainingCount: res.remainingCount };
+  } else {
+    if (!isSilent) {
+      SpreadsheetApp.getUi().alert(
+        "📁 Drive Automation",
+        "All creators in Flow already have Script docs and Drive links attached! (No missing links found).",
+        SpreadsheetApp.getUi().ButtonSet.OK
+      );
+    }
+    return { success: true, createdCount: 0, remainingCount: 0 };
+  }
+}
+
+/**
+ * Pushes Script Doc Links & Video Draft (Revision/Reshoot) Folder Links
+ * from the Master Flow sheet into all active Employee Sheets!
+ * Safely updates ONLY the specific Script Link and Revision/Reshoot Drive Link columns in employee sheets.
+ * 
+ * Options:
+ * - targetEmployeeNames: array of employee names to sync (or null for all)
+ * - isSilent: boolean, suppresses UI alert popups
+ */
+function syncDriveLinksToEmployeeSheets(options) {
+  options = options || {};
+  var isSilent = options.isSilent === true;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var flowSheet = ss.getSheetByName(TARGET_FLOW_TAB);
+  if (!flowSheet) {
+    if (!isSilent) SpreadsheetApp.getUi().alert("Could not find '" + TARGET_FLOW_TAB + "' sheet.");
+    return { success: false, error: "Flow sheet not found" };
+  }
+
+  var flowLastRow = flowSheet.getLastRow();
+  var flowLastCol = flowSheet.getLastColumn();
+  if (flowLastRow < 2 || flowLastCol < 1) {
+    return { success: true, totalRowsUpdated: 0, totalCellsUpdated: 0, sheetsUpdatedCount: 0, summaryDetails: [] };
+  }
+
+  var flowHeaders = flowSheet.getRange(1, 1, 1, flowLastCol).getValues()[0];
+  var flowColMap = {};
+  for (var c = 0; c < flowHeaders.length; c++) {
+    var h = String(flowHeaders[c] || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (h) flowColMap[h] = c + 1;
+  }
+
+  var flowCreatorCol = findFlowColIndexByKeys(flowColMap, [
+    "creatorname", "creator", "creatorsname", "influencername", "creatornameinfluencername"
+  ]);
+  var flowScriptCol = findScriptColIndex(flowColMap);
+  if (!flowScriptCol) {
+    flowScriptCol = findFlowColIndexByKeys(flowColMap, [
+      "scriptlink", "scripturl", "scriptdoclink", "scriptgoogledoclink", "scriptdrivelink", "scriptdoc"
+    ]);
+  }
+  var flowDraftCol = findFlowColIndexByKeys(flowColMap, [
+    "revisionreshootfreqdrivelink", "revisionreshootdrivelink", "revisiondrivelink", "revisionlink",
+    "reshootdrivelink", "reshootlink", "videodraftlink", "videodraft", "draftlink", "drivelink",
+    "draftdrivelink", "videorevisedlink", "videorevised", "1stdraftlink", "firstdraftlink"
+  ]);
+  var flowCampIdCol = findFlowColIndexByKeys(flowColMap, ["campaignid", "campid", "cid"]);
+  var flowCampNameCol = findFlowColIndexByKeys(flowColMap, ["campaignname", "briefname", "brief", "campaign"]);
+  var flowIdCol = findFlowColIndexByKeys(flowColMap, ["deliverableid", "id", "uuid"]);
+
+  if (!flowCreatorCol || (!flowScriptCol && !flowDraftCol)) {
+    Logger.log("Flow sheet missing Creator or link columns.");
+    return { success: false, error: "Required columns missing in Flow sheet" };
+  }
+
+  var flowData = flowSheet.getRange(2, 1, flowLastRow - 1, flowLastCol).getValues();
+
+  var flowLinksById = {};
+  var flowLinksByCampIdCr = {};
+  var flowLinksByBriefCr = {};
+  var flowLinksByCr = {};
+  var totalFlowWithLinks = 0;
+
+  for (var i = 0; i < flowData.length; i++) {
+    var fRow = flowData[i];
+    var cName = flowCreatorCol ? String(fRow[flowCreatorCol - 1] || "").trim() : "";
+    if (!cName) continue;
+
+    var sLink = flowScriptCol ? String(fRow[flowScriptCol - 1] || "").trim() : "";
+    var dLink = flowDraftCol ? String(fRow[flowDraftCol - 1] || "").trim() : "";
+
+    var hasValidScript = sLink.indexOf("http") !== -1;
+    var hasValidDraft = dLink.indexOf("http") !== -1;
+    if (!hasValidScript && !hasValidDraft) continue;
+
+    totalFlowWithLinks++;
+
+    var linkObj = {
+      scriptLink: hasValidScript ? sLink : "",
+      draftLink: hasValidDraft ? dLink : "",
+      creator: cName
+    };
+
+    var cleanCr = cName.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+    var dId = flowIdCol ? String(fRow[flowIdCol - 1] || "").trim() : "";
+    if (dId) flowLinksById[dId] = linkObj;
+
+    var campId = flowCampIdCol ? String(fRow[flowCampIdCol - 1] || "").trim().toLowerCase() : "";
+    if (campId && cleanCr) {
+      flowLinksByCampIdCr[campId + "_" + cleanCr] = linkObj;
+    }
+
+    var brief = flowCampNameCol ? String(fRow[flowCampNameCol - 1] || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+    if (brief && cleanCr) {
+      flowLinksByBriefCr[brief + "_" + cleanCr] = linkObj;
+    }
+
+    if (cleanCr && !flowLinksByCr[cleanCr]) {
+      flowLinksByCr[cleanCr] = linkObj;
+    }
+  }
+
+  if (totalFlowWithLinks === 0) {
+    if (!isSilent) {
+      SpreadsheetApp.getUi().alert("No script or drive links found in Flow sheet to push.");
+    }
+    return { success: true, totalRowsUpdated: 0, totalCellsUpdated: 0, sheetsUpdatedCount: 0, summaryDetails: [] };
+  }
+
+  var empList = getEmployeeSheetsList();
+  if (!empList || empList.length === 0) {
+    if (!isSilent) {
+      SpreadsheetApp.getUi().alert("No active employee sheets found in '⚙️ Employee Sheets' registry.");
+    }
+    return { success: false, error: "No employee sheets found." };
+  }
+
+  var totalCellsUpdated = 0;
+  var totalRowsUpdated = 0;
+  var sheetsUpdatedCount = 0;
+  var summaryDetails = [];
+
+  for (var e = 0; e < empList.length; e++) {
+    var emp = empList[e];
+    if (options.targetEmployeeNames && options.targetEmployeeNames.length > 0) {
+      var matchEmp = false;
+      for (var t = 0; t < options.targetEmployeeNames.length; t++) {
+        if (emp.employee.toLowerCase().indexOf(options.targetEmployeeNames[t].toLowerCase()) !== -1) {
+          matchEmp = true;
+          break;
+        }
+      }
+      if (!matchEmp) continue;
+    }
+
+    try {
+      var empSs = SpreadsheetApp.openById(emp.sheetId);
+      var empSheet = empSs.getSheetByName(emp.tabName || "ExecutionSheet");
+      if (!empSheet) {
+        empSheet = empSs.getSheets()[0];
+      }
+      if (!empSheet) continue;
+
+      var empLastRow = empSheet.getLastRow();
+      var empLastCol = empSheet.getLastColumn();
+      if (empLastRow < 2 || empLastCol < 1) continue;
+
+      var empHeaders = empSheet.getRange(1, 1, 1, empLastCol).getValues()[0];
+      var empColMap = {};
+      for (var c = 0; c < empHeaders.length; c++) {
+        var eh = String(empHeaders[c] || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (eh) empColMap[eh] = c + 1;
+      }
+
+      var empCrCol = findFlowColIndexByKeys(empColMap, [
+        "creatorname", "creator", "creatorsname", "influencername", "creatornameinfluencername"
+      ]);
+      var empScriptCol = findScriptColIndex(empColMap);
+      if (!empScriptCol) {
+        empScriptCol = findFlowColIndexByKeys(empColMap, [
+          "scriptlink", "scripturl", "scriptdoclink", "scriptgoogledoclink", "scriptdrivelink", "scriptdoc"
+        ]);
+      }
+      var empDraftCol = findFlowColIndexByKeys(empColMap, [
+        "revisionreshootfreqdrivelink", "revisionreshootdrivelink", "revisiondrivelink", "revisionlink",
+        "reshootdrivelink", "reshootlink", "videodraftlink", "videodraft", "draftlink", "drivelink",
+        "draftdrivelink", "videorevisedlink", "videorevised", "1stdraftlink", "firstdraftlink"
+      ]);
+      var empCampIdCol = findFlowColIndexByKeys(empColMap, ["campaignid", "campid", "cid"]);
+      var empBriefCol = findFlowColIndexByKeys(empColMap, ["briefname", "brief", "campaignname", "campaign"]);
+      var empIdCol = findFlowColIndexByKeys(empColMap, ["deliverableid", "id", "uuid"]);
+
+      if (!empCrCol || (!empScriptCol && !empDraftCol)) {
+        Logger.log("Employee sheet " + emp.employee + " missing Creator or link columns.");
+        continue;
+      }
+
+      var rowCount = empLastRow - 1;
+      var empCreatorsData = empSheet.getRange(2, empCrCol, rowCount, 1).getValues();
+      var empCampIdData = empCampIdCol ? empSheet.getRange(2, empCampIdCol, rowCount, 1).getValues() : null;
+      var empBriefData = empBriefCol ? empSheet.getRange(2, empBriefCol, rowCount, 1).getValues() : null;
+      var empIdData = empIdCol ? empSheet.getRange(2, empIdCol, rowCount, 1).getValues() : null;
+
+      var scriptValues = empScriptCol ? empSheet.getRange(2, empScriptCol, rowCount, 1).getValues() : null;
+      var draftValues = empDraftCol ? empSheet.getRange(2, empDraftCol, rowCount, 1).getValues() : null;
+
+      var sheetRowsModified = 0;
+      var sheetCellsModified = 0;
+
+      for (var r = 0; r < rowCount; r++) {
+        var eCreator = String(empCreatorsData[r][0] || "").trim();
+        if (!eCreator) continue;
+
+        var cleanECr = eCreator.toLowerCase().replace(/[^a-z0-9]/g, "");
+        var matched = null;
+
+        var eId = empIdData ? String(empIdData[r][0] || "").trim() : "";
+        if (eId && flowLinksById[eId]) {
+          matched = flowLinksById[eId];
+        }
+
+        if (!matched && empCampIdData) {
+          var eCampId = String(empCampIdData[r][0] || "").trim().toLowerCase();
+          if (eCampId && flowLinksByCampIdCr[eCampId + "_" + cleanECr]) {
+            matched = flowLinksByCampIdCr[eCampId + "_" + cleanECr];
+          }
+        }
+
+        if (!matched && empBriefData) {
+          var eBrief = String(empBriefData[r][0] || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+          if (eBrief && flowLinksByBriefCr[eBrief + "_" + cleanECr]) {
+            matched = flowLinksByBriefCr[eBrief + "_" + cleanECr];
+          }
+        }
+
+        if (!matched && flowLinksByCr[cleanECr]) {
+          matched = flowLinksByCr[cleanECr];
+        }
+
+        if (!matched) continue;
+
+        var rowChanged = false;
+
+        if (scriptValues && matched.scriptLink) {
+          var curScript = String(scriptValues[r][0] || "").trim();
+          if (!curScript || curScript !== matched.scriptLink) {
+            scriptValues[r][0] = matched.scriptLink;
+            rowChanged = true;
+            sheetCellsModified++;
+          }
+        }
+
+        if (draftValues && matched.draftLink) {
+          var curDraft = String(draftValues[r][0] || "").trim();
+          if (!curDraft || curDraft !== matched.draftLink) {
+            draftValues[r][0] = matched.draftLink;
+            rowChanged = true;
+            sheetCellsModified++;
+          }
+        }
+
+        if (rowChanged) {
+          sheetRowsModified++;
+        }
+      }
+
+      if (sheetRowsModified > 0) {
+        if (scriptValues && empScriptCol) {
+          empSheet.getRange(2, empScriptCol, rowCount, 1).setValues(scriptValues);
+        }
+        if (draftValues && empDraftCol) {
+          empSheet.getRange(2, empDraftCol, rowCount, 1).setValues(draftValues);
+        }
+        SpreadsheetApp.flush();
+        totalRowsUpdated += sheetRowsModified;
+        totalCellsUpdated += sheetCellsModified;
+        sheetsUpdatedCount++;
+        summaryDetails.push("• " + emp.employee + " (" + empSheet.getName() + "): " + sheetRowsModified + " rows (" + sheetCellsModified + " links updated)");
+      }
+    } catch (empErr) {
+      Logger.log("Error syncing links to " + emp.employee + " (" + emp.sheetId + "): " + empErr.toString());
+    }
+  }
+
+  return {
+    success: true,
+    totalRowsUpdated: totalRowsUpdated,
+    totalCellsUpdated: totalCellsUpdated,
+    sheetsUpdatedCount: sheetsUpdatedCount,
+    summaryDetails: summaryDetails
+  };
+}
+
+/**
+ * Toolbar Action: Pushes all Script doc links and Video Draft links from Flow
+ * into each respective Employee Sheet.
+ */
+function menuPushDriveLinksToEmployeeSheets() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  try {
+    ss.toast("Pushing Drive links from Flow to Employee Sheets...", "⚡ Xcelerate Pulse", 5);
+  } catch (_) {}
+
+  var res = syncDriveLinksToEmployeeSheets({ isSilent: false });
+  if (res.success) {
+    var details = res.summaryDetails && res.summaryDetails.length > 0
+      ? "\n\nBreakdown:\n" + res.summaryDetails.join("\n")
+      : "";
+    SpreadsheetApp.getUi().alert(
+      "📤 Drive Links Pushed to Employee Sheets!",
+      "Successfully updated " + res.totalRowsUpdated + " rows (" + res.totalCellsUpdated + " link cells) across " + res.sheetsUpdatedCount + " employee sheet(s)!" + details + "\n\nEmployees can now open their personal execution sheets and click the Script doc & Video Draft links directly!",
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  }
+}
+
+
+
 

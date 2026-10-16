@@ -130,6 +130,7 @@ function mapRowToDeliverable(r: any): CreatorDeliverableInternal {
     product_status: String(r.product_status || "Not Applicable") as any,
     confirmation_mail_status: String(r.confirmation_mail_status || "Pending") as any,
     script_link: String(r.script_link || ""),
+    script_received_date: cleanDateOnly(r.script_received_date),
     script_status: String(r.script_status || "Script Pending") as any,
     script_approval_date: cleanDateOnly(r.script_approval_date),
     first_draft_status: String(r.first_draft_status || "Draft Pending") as any,
@@ -512,6 +513,7 @@ export async function updateDeliverableWithAutomation(
     sql: `UPDATE campaign_creators SET
       category = ?,
       script_status = ?,
+      script_received_date = ?,
       script_approval_date = ?,
       first_draft_status = ?,
       first_draft_date = ?,
@@ -563,6 +565,7 @@ export async function updateDeliverableWithAutomation(
     args: [
       updated.category || "Unspecified",
       updated.script_status || "Script Pending",
+      cleanDateOnly(updated.script_received_date),
       cleanDateOnly(updated.script_approval_date),
       updated.first_draft_status || "Draft Pending",
       cleanDateOnly(updated.first_draft_date),

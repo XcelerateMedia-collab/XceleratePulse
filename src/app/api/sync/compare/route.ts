@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
       sql: `SELECT id, campaign_id, creator_name, deliverables, 
                    execution_status, live_link, total_views, likes, comments, 
                    brand_cost, creator_cost, gross_margin, execution_owner, brief_name, 
-                   brand_agency_poc, invoice_status, updated_at
+                   brand_agency_poc, invoice_status, script_received_date, updated_at
             FROM campaign_creators`
     });
 
@@ -224,6 +224,7 @@ export async function GET(req: NextRequest) {
         checkDiff("creator_cost", "Creator Cost", dbRecord.creator_cost, (deliverable as any).creator_cost, true);
         checkDiff("execution_owner", "Execution Owner", dbRecord.execution_owner, (deliverable as any).execution_owner);
         checkDiff("invoice_status", "Invoice Status", dbRecord.invoice_status, (deliverable as any).invoice_status);
+        checkDiff("script_received_date", "Script Received Date", dbRecord.script_received_date, deliverable.script_received_date);
 
         if (changes.length > 0) {
           modifiedRecords.push({
@@ -360,7 +361,7 @@ export async function POST(req: NextRequest) {
       sql: `SELECT id, campaign_id, creator_name, deliverables, 
                    execution_status, live_link, total_views, likes, comments, 
                    brand_cost, creator_cost, gross_margin, execution_owner, brief_name, 
-                   brand_agency_poc, invoice_status
+                   brand_agency_poc, invoice_status, script_received_date
             FROM campaign_creators`
     });
 
@@ -454,6 +455,9 @@ export async function POST(req: NextRequest) {
         }
         if (String(dbRecord.deliverables || "").trim().toLowerCase() !== String(deliverable.deliverables || "").trim().toLowerCase()) {
           diffList.push(`Deliverables: ${deliverable.deliverables}`);
+        }
+        if (String(dbRecord.script_received_date || "").trim() !== String(deliverable.script_received_date || "").trim()) {
+          diffList.push(`Script Received Date: ${deliverable.script_received_date || "(empty)"}`);
         }
 
         if (diffList.length > 0) {
