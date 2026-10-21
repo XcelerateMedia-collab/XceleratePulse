@@ -11,12 +11,14 @@ import { AgencyFinancialsView } from "@/components/admin/AgencyFinancialsView";
 import { AdminSettingsPanel } from "@/components/admin/AdminSettingsPanel";
 import { CampaignSelector, formatCleanMonth } from "@/components/pipeline/CampaignSelector";
 import { LandingHero } from "@/components/landing/LandingHero";
+import { AllCampaignsPortfolioView } from "@/components/campaigns/AllCampaignsPortfolioView";
 import { 
   Kanban, 
   BarChart3, 
   PieChart, 
   RefreshCw, 
-  Settings
+  Settings,
+  Layers
 } from "lucide-react";
 
 const SESSION_STORAGE_KEY = "xcelerate_pulse_auth_session";
@@ -25,7 +27,7 @@ interface PulseAuthSession {
   viewMode: "landing" | "portal";
   role: Role;
   selectedOrg: string;
-  activeTab: "pipeline" | "analytics" | "financials" | "settings";
+  activeTab: "campaigns" | "pipeline" | "analytics" | "financials" | "settings";
   credential?: BrandCredential | null;
   selectedCampaignId?: string;
   selectedCampaignIds?: string[];
@@ -43,7 +45,7 @@ export default function Home() {
   const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(["ALL"]);
   const [deliverables, setDeliverables] = useState<(CreatorDeliverableBrandView | CreatorDeliverableInternal)[]>([]);
   const [isInternal, setIsInternal] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<"pipeline" | "analytics" | "financials" | "settings">("pipeline");
+  const [activeTab, setActiveTab] = useState<"campaigns" | "pipeline" | "analytics" | "financials" | "settings">("pipeline");
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Active refs to ensure callbacks have stable references across renders
@@ -498,6 +500,23 @@ export default function Home() {
           <div className="w-full lg:w-auto overflow-x-auto no-scrollbar py-0.5">
             <div className="inline-flex items-center p-1 sm:p-1.5 rounded-2xl bg-white border border-slate-200 text-xs font-bold shadow-xs min-w-max gap-1">
               <button
+                onClick={() => setActiveTab("campaigns")}
+                className={`flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-2 rounded-xl cursor-pointer transition-all shrink-0 ${
+                  activeTab === "campaigns"
+                    ? "bg-[#0052FF] text-white shadow-md shadow-blue-500/25"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                }`}
+              >
+                <Layers className="w-4 h-4 shrink-0" />
+                <span>All Campaigns</span>
+                <span className={`px-1.5 py-0.2 rounded-full font-mono text-[10px] font-bold ${
+                  activeTab === "campaigns" ? "bg-white text-[#0052FF]" : "bg-slate-100 text-slate-700"
+                }`}>
+                  {campaigns.length}
+                </span>
+              </button>
+
+              <button
                 onClick={() => setActiveTab("pipeline")}
                 className={`flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-2 rounded-xl cursor-pointer transition-all shrink-0 ${
                   activeTab === "pipeline"
@@ -535,7 +554,7 @@ export default function Home() {
                   }`}
                 >
                   <PieChart className="w-4 h-4 shrink-0" />
-                  <span>Agency ERP &amp; P&amp;L</span>
+                  <span>Execution &amp; Agency ERP</span>
                 </button>
               )}
 
@@ -564,13 +583,28 @@ export default function Home() {
           </div>
         ) : (
           <>
-            {/* Executive KPIs */}
-            <ExecutiveKpis
-              deliverables={deliverables}
-              isInternal={isInternal}
-              role={role}
-              campaignName={activeDisplayTitle}
-            />
+            {/* Executive KPIs (Hidden on All Campaigns tab since it features its own comprehensive hero showcase) */}
+            {activeTab !== "campaigns" && (
+              <ExecutiveKpis
+                deliverables={deliverables}
+                isInternal={isInternal}
+                role={role}
+                campaignName={activeDisplayTitle}
+              />
+            )}
+
+            {/* Tab 0: All Campaigns Single-View Portfolio */}
+            <div className={activeTab === "campaigns" ? "block" : "hidden"}>
+              <AllCampaignsPortfolioView
+                campaigns={campaigns}
+                deliverables={allDeliverablesRef.current.length > 0 ? allDeliverablesRef.current : deliverables}
+                onSelectCampaign={(campId) => {
+                  handleCampaignsChange([campId]);
+                  setActiveTab("pipeline");
+                }}
+                onOpenPipeline={() => setActiveTab("pipeline")}
+              />
+            </div>
 
             {/* Tab 1: Live Execution Pipeline */}
             <div className={activeTab === "pipeline" ? "block" : "hidden"}>
@@ -596,10 +630,17 @@ export default function Home() {
               />
             </div>
 
-            {/* Tab 3: Internal Agency ERP & Financials */}
+            {/* Tab 3: Internal Agency ERP & Execution Intelligence */}
             {(role === "SUPER_ADMIN" || role === "INTERNAL_OPS") && (
               <div className={activeTab === "financials" ? "block" : "hidden"}>
-                <AgencyFinancialsView campaigns={campaigns} />
+                <AgencyFinancialsView 
+                  campaigns={campaigns} 
+                  deliverables={allDeliverablesRef.current.length > 0 ? allDeliverablesRef.current : deliverables}
+                  onSelectCampaign={(campId) => {
+                    handleCampaignsChange([campId]);
+                    setActiveTab("pipeline");
+                  }}
+                />
               </div>
             )}
 

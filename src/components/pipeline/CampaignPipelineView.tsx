@@ -1544,7 +1544,6 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                 {isInternal ? (
                   <>
                     <th className="py-3 px-3 min-w-[95px] text-indigo-700 font-bold">Creator Cost</th>
-                    <th className="py-3 px-3 min-w-[95px] text-[#0052FF] font-bold">Gross Margin</th>
                     <th className="py-3 px-3 min-w-[100px] text-slate-700">Phone</th>
                   </>
                 ) : isPerformanceAnalyst ? (
@@ -1875,13 +1874,6 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                             <span className="text-slate-400 line-through">₹0</span>
                           ) : (
                             formatCurrency(internalItem.creator_cost || 0)
-                          )}
-                        </td>
-                        <td className="py-3 px-3 font-extrabold text-[#0052FF] align-middle">
-                          {isItemDropped(item) ? (
-                            <span className="text-slate-400 line-through">₹0</span>
-                          ) : (
-                            formatCurrency(internalItem.gross_margin || 0)
                           )}
                         </td>
                         <td className="py-3 px-3 text-[11px] text-slate-700 font-medium whitespace-nowrap align-middle">
@@ -2344,9 +2336,7 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                   {/* Footer Action Strip */}
                   <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
                     <span className="text-[11px] font-bold text-slate-500">
-                      {isInternal 
-                        ? (isItemDropped(item) ? "Gross Margin: ₹0 (Dropped)" : `Gross Margin: ${formatCurrency(internalItem.gross_margin || 0)}`)
-                        : isPerformanceAnalyst 
+                      {isPerformanceAnalyst 
                         ? `Performance: ${formatNumber(item.total_views || 0)} Views • ${item.engagement_rate || 0}% ER`
                         : (isItemDropped(item) ? "Budget: ₹0 (Dropped)" : `Budget: ${formatCurrency(item.brand_cost || 0)}`)
                       }
@@ -3535,7 +3525,7 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                     <ShieldCheck className="w-4 h-4" />
                     <span>Confidential Agency Commercials (Hidden From Brand)</span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs pt-1">
                     <div className="p-2.5 bg-white rounded-xl border border-blue-200/60 shadow-2xs">
                       <span className="text-slate-500 font-semibold text-[10px] uppercase">Creator Cost:</span>
                       <p className="text-sm font-extrabold text-slate-900 mt-0.5">
@@ -3543,16 +3533,6 @@ export const CampaignPipelineView: React.FC<CampaignPipelineViewProps> = React.m
                           <span className="text-slate-400 line-through">₹0 (Dropped)</span>
                         ) : (
                           formatCurrency((selectedCreator as CreatorDeliverableInternal).creator_cost || 0)
-                        )}
-                      </p>
-                    </div>
-                    <div className="p-2.5 bg-white rounded-xl border border-blue-200/60 shadow-2xs">
-                      <span className="text-slate-500 font-semibold text-[10px] uppercase">Gross Margin:</span>
-                      <p className="text-sm font-extrabold text-[#0052FF] mt-0.5">
-                        {isItemDropped(selectedCreator) ? (
-                          <span className="text-slate-400 line-through">₹0 (Dropped)</span>
-                        ) : (
-                          formatCurrency((selectedCreator as CreatorDeliverableInternal).gross_margin || 0)
                         )}
                       </p>
                     </div>

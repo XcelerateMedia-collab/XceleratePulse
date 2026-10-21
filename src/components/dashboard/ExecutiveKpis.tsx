@@ -45,8 +45,6 @@ export const ExecutiveKpis: React.FC<ExecutiveKpisProps> = React.memo(({
     totalBrandCost,
     droppedBrandCost,
     totalCreatorCost,
-    totalGrossMargin,
-    marginPct,
   } = React.useMemo(() => {
     let aCount = 0;
     let dCount = 0;
@@ -62,7 +60,6 @@ export const ExecutiveKpis: React.FC<ExecutiveKpisProps> = React.memo(({
     let bCost = 0;
     let dropBCost = 0;
     let cCost = 0;
-    let gMargin = 0;
 
     const isStatusDrop = (val: any) => {
       if (!val) return false;
@@ -102,7 +99,6 @@ export const ExecutiveKpis: React.FC<ExecutiveKpisProps> = React.memo(({
         bCost += d.brand_cost || 0;
         if (isInternal) {
           cCost += (d as CreatorDeliverableInternal).creator_cost || 0;
-          gMargin += (d as CreatorDeliverableInternal).gross_margin || 0;
         }
       }
     }
@@ -124,8 +120,6 @@ export const ExecutiveKpis: React.FC<ExecutiveKpisProps> = React.memo(({
       totalBrandCost: bCost,
       droppedBrandCost: dropBCost,
       totalCreatorCost: cCost,
-      totalGrossMargin: gMargin,
-      marginPct: bCost > 0 ? ((gMargin / bCost) * 100).toFixed(1) : "0.0",
     };
   }, [deliverables, isInternal]);
 
@@ -157,8 +151,8 @@ export const ExecutiveKpis: React.FC<ExecutiveKpisProps> = React.memo(({
         {isInternal ? (
           <div className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold self-start sm:self-auto shrink-0">
             <PieChart className="w-3.5 h-3.5 shrink-0" />
-            <span className="hidden sm:inline">Xcelerate Ops • Internal Financials Unmasked</span>
-            <span className="sm:hidden">Internal Financials Unmasked</span>
+            <span className="hidden sm:inline">Xcelerate Ops • Internal Operations &amp; Commercials</span>
+            <span className="sm:hidden">Internal Operations Active</span>
           </div>
         ) : role === "PERFORMANCE_ANALYST" ? (
           <div className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-xs font-semibold self-start sm:self-auto shrink-0">
@@ -273,23 +267,8 @@ export const ExecutiveKpis: React.FC<ExecutiveKpisProps> = React.memo(({
           </div>
         </div>
 
-        {/* Commercials or Operational KPI: Strictly Hide Margins from Performance Analyst */}
-        {isInternal ? (
-          <div className="p-4 rounded-2xl bg-white border-2 border-blue-200 shadow-xs hover:shadow-md transition-all relative overflow-hidden">
-            <div className="flex items-center justify-between text-[#0052FF] text-xs font-bold uppercase tracking-wider mb-2">
-              <span>Gross Margin</span>
-              <div className="p-1.5 rounded-lg bg-blue-50 text-[#0052FF] border border-blue-100">
-                <DollarSign className="w-4 h-4" />
-              </div>
-            </div>
-            <div className="text-2xl font-black text-[#0052FF] tracking-tight">
-              {formatCurrency(totalGrossMargin)}
-            </div>
-            <div className="text-[11px] text-slate-700 font-bold mt-1">
-              {marginPct}% Margin ({formatCurrency(totalBrandCost)} Rev)
-            </div>
-          </div>
-        ) : role === "PERFORMANCE_ANALYST" ? (
+        {/* Commercials or Operational KPI */}
+        {role === "PERFORMANCE_ANALYST" ? (
           <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-md hover:border-purple-300 transition-all relative overflow-hidden group">
             <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">
               <span>Total Interactions</span>

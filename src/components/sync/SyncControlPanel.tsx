@@ -34,6 +34,12 @@ import {
   Play,
   Loader2,
   ArrowDownUp,
+  FolderOpen,
+  FileText,
+  Send,
+  Share2,
+  FolderCheck,
+  ArrowRight,
 } from "lucide-react";
 import { CampaignSummary, CreatorDeliverableBrandView, CreatorDeliverableInternal, EmployeeSheet } from "@/lib/types";
 import { SheetDbCompareView } from "./SheetDbCompareView";
@@ -318,6 +324,21 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
         else if (safeProgress < 55) setSyncStage("Reading & extracting employee sheet records...");
         else if (safeProgress < 80) setSyncStage("Mapping Brief Name directly to Campaign Name in Flow...");
         else setSyncStage("Batch-writing rows into Master Flow sheet...");
+      } else if (actionName === "create_drive_assets") {
+        if (safeProgress < 20) setSyncStage("Connecting to Google Drive Engine...");
+        else if (safeProgress < 45) setSyncStage("Scanning Flow sheet for creators missing Drive links...");
+        else if (safeProgress < 75) setSyncStage("Creating Execution Owner > Brand > Creator folders & Script Docs...");
+        else setSyncStage("Writing links to Flow sheet & updating employee sheets...");
+      } else if (actionName === "push_drive_links") {
+        if (safeProgress < 25) setSyncStage("Reading Script Docs & Drive folders from Master Flow...");
+        else if (safeProgress < 60) setSyncStage("Connecting to target Employee Google Sheet(s)...");
+        else if (safeProgress < 85) setSyncStage("Matching creator rows & updating Script & Video Draft link cells...");
+        else setSyncStage("Finalizing changes in Employee Execution Sheet(s)...");
+      } else if (actionName === "full_drive_pipeline") {
+        if (safeProgress < 25) setSyncStage("Step 1/4: Pulling all employee sheets into Master Flow...");
+        else if (safeProgress < 50) setSyncStage("Step 2/4: Auto-creating missing Google Drive folders & Script Docs...");
+        else if (safeProgress < 75) setSyncStage("Step 3/4: Pushing Drive links to Employee Execution Sheet(s)...");
+        else setSyncStage("Step 4/4: Synchronizing latest deliverables to platform database...");
       } else if (actionName.includes("sync")) {
         if (safeProgress < 30) setSyncStage("Reading Flow sheet deliverables...");
         else if (safeProgress < 70) setSyncStage("Packaging records & verifying creator data...");
@@ -356,6 +377,9 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
     switch (action) {
       case "pull_all": return "Pulling all employee sheets into Master Flow";
       case "pull_employee": return `Pulling ${selectedEmployee !== "ALL" ? selectedEmployee : "selected"} sheet into Master Flow`;
+      case "create_drive_assets": return `Auto-generating Google Drive folders & Script Docs (Batch of ${driveBatchSize})`;
+      case "push_drive_links": return `Pushing Drive links to ${driveTargetEmployee === "ALL" ? "all connected employee sheets" : `${driveTargetEmployee}'s sheet`}`;
+      case "full_drive_pipeline": return "Running Full Pipeline (Pull ➔ Create Drive ➔ Push to Employees ➔ Sync DB)";
       case "sync_all": return "Syncing Master Flow sheet to database";
       case "sync_month": return `Syncing month ${selectedMonth} to database`;
       case "sync_campaign": return `Syncing campaign ${selectedCampaignId} to database`;
@@ -400,7 +424,79 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
   });
 
   // Active subtab inside Sync Panel
-  const [panelTab, setPanelTab] = useState<"actions" | "compare" | "logs" | "registry" | "settings" | "cleanup">("actions");
+  const [panelTab, setPanelTab] = useState<"actions" | "drive" | "compare" | "logs" | "registry" | "settings" | "cleanup">("actions");
+
+  // Google Drive & Script Docs Engine State
+  const [driveBatchSize, setDriveBatchSize] = useState<number>(25);
+  const [driveTargetEmployee, setDriveTargetEmployee] = useState<string>("ALL");
+  const [driveAutoPush, setDriveAutoPush] = useState<boolean>(true);
+  const [driveSearch, setDriveSearch] = useState<string>("");
+  const [driveFilterStatus, setDriveFilterStatus] = useState<"ALL" | "MISSING_DOC" | "MISSING_DRAFT" | "MISSING_ANY" | "FULLY_LINKED">("ALL");
+  const [copiedLinkCreatorId, setCopiedLinkCreatorId] = useState<string | null>(null);
+
+  // Compute live Google Drive link stats across deliverables
+  const driveStats = useMemo(() => {
+    let withScript = 0;
+    let withDraft = 0;
+    let fullyLinked = 0;
+    let missingAny = 0;
+
+    for (let i = 0; i < deliverables.length; i++) {
+      const d = deliverables[i];
+      const hasScript = Boolean(d.script_link && d.script_link.trim().startsWith("http"));
+      const hasDraft = Boolean(d.revision_drive_link && d.revision_drive_link.trim().startsWith("http"));
+      if (hasScript) withScript++;
+      if (hasDraft) withDraft++;
+      if (hasScript && hasDraft) fullyLinked++;
+      else missingAny++;
+    }
+
+    const total = deliverables.length;
+    return {
+      total,
+      withScript,
+      withDraft,
+      fullyLinked,
+      missingAny,
+      scriptPercent: total > 0 ? Math.round((withScript / total) * 100) : 0,
+      draftPercent: total > 0 ? Math.round((withDraft / total) * 100) : 0,
+      fullyLinkedPercent: total > 0 ? Math.round((fullyLinked / total) * 100) : 0,
+    };
+  }, [deliverables]);
+
+  // Filtered deliverables for the Google Drive Engine Explorer
+  const filteredDriveDeliverables = useMemo(() => {
+    let list = deliverables;
+    if (driveTargetEmployee !== "ALL") {
+      const target = driveTargetEmployee.toLowerCase();
+      list = list.filter((d) => {
+        const owner = ((d as any).execution_owner || (d as any).xcelerate_poc || "").toLowerCase();
+        return owner.includes(target);
+      });
+    }
+    if (driveFilterStatus !== "ALL") {
+      list = list.filter((d) => {
+        const hasScript = Boolean(d.script_link && d.script_link.trim().startsWith("http"));
+        const hasDraft = Boolean(d.revision_drive_link && d.revision_drive_link.trim().startsWith("http"));
+        if (driveFilterStatus === "MISSING_DOC") return !hasScript;
+        if (driveFilterStatus === "MISSING_DRAFT") return !hasDraft;
+        if (driveFilterStatus === "MISSING_ANY") return !hasScript || !hasDraft;
+        if (driveFilterStatus === "FULLY_LINKED") return hasScript && hasDraft;
+        return true;
+      });
+    }
+    if (driveSearch.trim()) {
+      const q = driveSearch.toLowerCase().trim();
+      list = list.filter((d) =>
+        d.creator_name.toLowerCase().includes(q) ||
+        (d.campaign_name && d.campaign_name.toLowerCase().includes(q)) ||
+        (d.org_name && d.org_name.toLowerCase().includes(q)) ||
+        ((d as any).execution_owner && (d as any).execution_owner.toLowerCase().includes(q)) ||
+        (d.profile_url && d.profile_url.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [deliverables, driveTargetEmployee, driveFilterStatus, driveSearch]);
 
   // Persistent Latest Sync Snapshot State
   interface SyncDataSnapshot {
@@ -872,7 +968,7 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
   }, [campaigns]);
 
   // Execute remote sync action
-  const executeAction = async (action: string, extraParams: Record<string, string> = {}) => {
+  const executeAction = async (action: string, extraParams: Record<string, any> = {}) => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -924,7 +1020,7 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
 
         const snapshot: SyncDataSnapshot = {
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " (" + new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }) + ")",
-          actionName: action === "pull_employee" ? `Pull ${selectedEmployee}` : action === "pull_all" ? "Pull All Employees" : action,
+          actionName: action === "pull_employee" ? `Pull ${selectedEmployee}` : action === "pull_all" ? "Pull All Employees" : action === "create_drive_assets" ? "Create Drive Assets" : action === "push_drive_links" ? "Push Drive Links" : action,
           totalUpdated: updated,
           totalAppended: appended,
           totalProcessed: processed,
@@ -937,7 +1033,7 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
         }
         fetchSyncLogs();
 
-        if (action.includes("sync") || action.includes("pull")) {
+        if (action.includes("sync") || action.includes("pull") || action.includes("drive")) {
           onSyncTriggered?.();
         }
       } else {
@@ -1252,6 +1348,27 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
             <span>Sync Menu Options</span>
+          </button>
+
+          <button
+            onClick={() => setPanelTab("drive")}
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+              panelTab === "drive"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5"
+            }`}
+          >
+            <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
+            <span>📁 Google Drive Engine</span>
+            {driveStats.missingAny > 0 ? (
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                panelTab === "drive" ? "bg-amber-100 text-amber-900 border border-amber-300" : "bg-amber-500/30 text-amber-300 border border-amber-400/30"
+              }`}>
+                {driveStats.missingAny} pending
+              </span>
+            ) : driveStats.total > 0 ? (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            ) : null}
           </button>
 
           <button
@@ -1734,7 +1851,174 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
             </div>
           </div>
 
-          {/* SECTION 2: PLATFORM SYNC ('Flow' Master Sheet -> Database) */}
+          {/* SECTION 2: GOOGLE DRIVE & SCRIPT DOCS ENGINE */}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center space-x-2">
+                <span className="p-1 rounded-md bg-amber-100 text-amber-700">
+                  <FolderOpen className="w-3.5 h-3.5" />
+                </span>
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                  2. Google Drive &amp; Employee Link Engine
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPanelTab("drive")}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs border border-amber-300 transition-colors cursor-pointer shadow-2xs"
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-amber-600" />
+                <span>Open Google Drive Engine Hub</span>
+                <ArrowRight className="w-3 h-3 text-amber-700" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Option A: Auto-Create Drive Folders & Script Docs */}
+              <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs hover:border-amber-300 transition-all space-y-3 flex flex-col justify-between">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-slate-900 flex items-center space-x-1.5">
+                      <span className="text-amber-500 font-mono">📁</span>
+                      <span>Auto-Create Drive Folders</span>
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                      Batch of 25
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                    Creates Owner ➔ Brand ➔ Creator folders, formatted Script Docs, and Video Draft folders in Drive.
+                  </p>
+                </div>
+
+                {activeAction === "create_drive_assets" ? (
+                  <div className="flex items-center space-x-2">
+                    <button
+                      disabled
+                      className="flex-1 py-2.5 px-2 rounded-xl bg-amber-600 text-white font-bold text-xs flex items-center justify-center space-x-1.5 cursor-wait shadow-sm"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Creating... {Math.round(syncProgress)}%</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelAction}
+                      className="py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center space-x-1 cursor-pointer transition-all"
+                    >
+                      <Square className="w-3 h-3 fill-current" />
+                      <span>Cancel</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    disabled={activeAction !== null}
+                    onClick={() => executeAction("create_drive_assets", { autoPushToEmployees: true, maxRows: 25 })}
+                    className="w-full py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition-all flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    <span>Auto-Create Next Batch</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Option B: Push Drive Links to Employee Sheets */}
+              <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs hover:border-blue-300 transition-all space-y-3 flex flex-col justify-between">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-slate-900 flex items-center space-x-1.5">
+                      <span className="text-blue-600 font-mono">📤</span>
+                      <span>Push Links to Employee Sheets</span>
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200">
+                      Bi-Directional
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                    Populates Script Doc and Video Draft folder URLs into all connected team member sheets.
+                  </p>
+                </div>
+
+                {activeAction === "push_drive_links" ? (
+                  <div className="flex items-center space-x-2">
+                    <button
+                      disabled
+                      className="flex-1 py-2.5 px-2 rounded-xl bg-blue-700 text-white font-bold text-xs flex items-center justify-center space-x-1.5 cursor-wait shadow-sm"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Pushing Links... {Math.round(syncProgress)}%</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelAction}
+                      className="py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center space-x-1 cursor-pointer transition-all"
+                    >
+                      <Square className="w-3 h-3 fill-current" />
+                      <span>Cancel</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    disabled={activeAction !== null}
+                    onClick={() => executeAction("push_drive_links", { employee: "ALL" })}
+                    className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Push to All Employee Sheets</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Option C: 1-Click End-to-End Master Pipeline */}
+              <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs hover:border-purple-300 transition-all space-y-3 flex flex-col justify-between">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-slate-900 flex items-center space-x-1.5">
+                      <span className="text-purple-600 font-mono">🚀</span>
+                      <span>1-Click Complete Pipeline</span>
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200">
+                      Full Workflow
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                    Pulls employee sheets ➔ provisions Drive assets ➔ pushes links to employees ➔ syncs DB.
+                  </p>
+                </div>
+
+                {activeAction === "full_drive_pipeline" ? (
+                  <div className="flex items-center space-x-2">
+                    <button
+                      disabled
+                      className="flex-1 py-2.5 px-2 rounded-xl bg-purple-700 text-white font-bold text-xs flex items-center justify-center space-x-1.5 cursor-wait shadow-sm"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Running Pipeline... {Math.round(syncProgress)}%</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelAction}
+                      className="py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center space-x-1 cursor-pointer transition-all"
+                    >
+                      <Square className="w-3 h-3 fill-current" />
+                      <span>Cancel</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    disabled={activeAction !== null}
+                    onClick={() => executeAction("full_drive_pipeline")}
+                    className="w-full py-2.5 px-3 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs transition-all flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Run Full Pipeline</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 3: PLATFORM SYNC ('Flow' Master Sheet -> Database) */}
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center space-x-2">
@@ -1742,7 +2026,7 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
                   <Sparkles className="w-3.5 h-3.5" />
                 </span>
                 <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                  2. Sync Master &apos;Flow&apos; Sheet to Database
+                  3. Sync Master &apos;Flow&apos; Sheet to Database
                 </h3>
               </div>
 
@@ -1913,14 +2197,14 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
             </div>
           </div>
 
-          {/* SECTION 3: AUTOMATION TRIGGERS */}
+          {/* SECTION 4: AUTOMATION TRIGGERS */}
           <div className="space-y-3">
             <div className="flex items-center space-x-2">
               <span className="p-1 rounded-md bg-amber-100 text-amber-700">
                 <Zap className="w-3.5 h-3.5" />
               </span>
               <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                3. Automation &amp; Background Triggers
+                4. Automation &amp; Background Triggers
               </h3>
             </div>
 
@@ -2062,6 +2346,639 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
             </div>
           )}
 
+        </div>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────────────────────── */}
+      {/* TAB: GOOGLE DRIVE & SCRIPT DOCS AUTOMATION ENGINE */}
+      {/* ───────────────────────────────────────────────────────────────────────────── */}
+      {panelTab === "drive" && (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Top Overview Banner */}
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-amber-950 via-slate-900 to-blue-950 text-white border border-amber-500/30 shadow-md">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="space-y-1.5 max-w-2xl">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-black uppercase tracking-wider border border-amber-500/30">
+                    Google Drive Automation
+                  </span>
+                  <span className="text-slate-400 text-xs font-semibold">•</span>
+                  <span className="text-emerald-400 text-xs font-semibold flex items-center space-x-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>Hierarchy: Owner ➔ Brand ➔ Creator</span>
+                  </span>
+                </div>
+                <h3 className="text-lg font-black text-white flex items-center space-x-2">
+                  <span>📁 Automated Google Drive &amp; Script Docs Engine</span>
+                </h3>
+                <p className="text-xs text-slate-300 font-medium leading-relaxed">
+                  Automatically provisions folder structures in Google Drive, creates formatted native Google Docs for creator scripts, generates Video Draft folders, and writes the links directly back into individual Employee Execution Sheets.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                <a
+                  href="https://drive.google.com/drive/folders/1pO8KjlqgCVgiPMC2yW2LhwEPHIBU_jyf"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-all border border-white/10 cursor-pointer shadow-xs"
+                >
+                  <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Open Root Execution Folder</span>
+                  <ExternalLink className="w-3 h-3 text-slate-400 ml-1" />
+                </a>
+              </div>
+            </div>
+
+            {/* Visual Folder Tree Indicator */}
+            <div className="mt-4 pt-3.5 border-t border-white/10 flex flex-wrap items-center gap-1.5 text-[11px] font-mono text-slate-300">
+              <span className="text-slate-400">Path:</span>
+              <span className="px-2 py-0.5 rounded-md bg-white/10 text-white font-bold">Xcelerate Media Pipeline</span>
+              <span className="text-slate-500">➔</span>
+              <span className="px-2 py-0.5 rounded-md bg-white/10 text-amber-300 font-bold">Xcelerate Media Execution</span>
+              <span className="text-slate-500">➔</span>
+              <span className="px-2 py-0.5 rounded-md bg-white/10 text-blue-300">[Owner] Execution</span>
+              <span className="text-slate-500">➔</span>
+              <span className="px-2 py-0.5 rounded-md bg-white/10 text-indigo-300">[Brand/Agency]</span>
+              <span className="text-slate-500">➔</span>
+              <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">[Creator] (Video Draft + Screenshots + Script.txt)</span>
+            </div>
+          </div>
+
+          {/* Drive Coverage KPI Telemetry Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            {/* KPI 1: Total Creators */}
+            <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Deliverables</span>
+              <div className="text-xl font-black text-slate-900">{driveStats.total}</div>
+              <span className="text-[10px] text-slate-500 font-medium flex items-center space-x-1">
+                <Users className="w-3 h-3 text-[#0052FF]" />
+                <span>In Database Scope</span>
+              </span>
+            </div>
+
+            {/* KPI 2: Script Google Docs */}
+            <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Script Docs</span>
+                <span className="text-[10px] font-bold text-blue-600 font-mono">{driveStats.scriptPercent}%</span>
+              </div>
+              <div className="text-xl font-black text-blue-600">
+                {driveStats.withScript} <span className="text-xs font-semibold text-slate-400">/ {driveStats.total}</span>
+              </div>
+              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1">
+                <div
+                  className="h-full bg-blue-600 rounded-full transition-all"
+                  style={{ width: `${driveStats.scriptPercent}%` }}
+                />
+              </div>
+            </div>
+
+            {/* KPI 3: Video Draft Folders */}
+            <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Draft Folders</span>
+                <span className="text-[10px] font-bold text-purple-600 font-mono">{driveStats.draftPercent}%</span>
+              </div>
+              <div className="text-xl font-black text-purple-600">
+                {driveStats.withDraft} <span className="text-xs font-semibold text-slate-400">/ {driveStats.total}</span>
+              </div>
+              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1">
+                <div
+                  className="h-full bg-purple-600 rounded-full transition-all"
+                  style={{ width: `${driveStats.draftPercent}%` }}
+                />
+              </div>
+            </div>
+
+            {/* KPI 4: Fully Linked */}
+            <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Fully Linked</span>
+                <span className="text-[10px] font-bold text-emerald-600 font-mono">{driveStats.fullyLinkedPercent}%</span>
+              </div>
+              <div className="text-xl font-black text-emerald-600">
+                {driveStats.fullyLinked} <span className="text-xs font-semibold text-slate-400">/ {driveStats.total}</span>
+              </div>
+              <span className="text-[10px] text-emerald-700 font-semibold flex items-center space-x-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                <span>Script &amp; Draft Ready</span>
+              </span>
+            </div>
+
+            {/* KPI 5: Pending Assets */}
+            <div className={`p-3.5 rounded-2xl border shadow-2xs space-y-1 ${
+              driveStats.missingAny > 0 ? "bg-amber-50/80 border-amber-300/80" : "bg-white border-slate-200"
+            }`}>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Pending Assets</span>
+              <div className={`text-xl font-black ${driveStats.missingAny > 0 ? "text-amber-700" : "text-slate-400"}`}>
+                {driveStats.missingAny}
+              </div>
+              <span className={`text-[10px] font-medium flex items-center space-x-1 ${
+                driveStats.missingAny > 0 ? "text-amber-800 font-bold" : "text-slate-500"
+              }`}>
+                {driveStats.missingAny > 0 ? (
+                  <>
+                    <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                    <span>Requires Drive generation</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                    <span>100% Fully Provisioned</span>
+                  </>
+                )}
+              </span>
+            </div>
+          </div>
+
+          {/* Interactive Action Control Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Action 1: Batch Auto-Create Drive Assets */}
+            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs hover:border-amber-300 transition-all space-y-3.5 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-slate-900 flex items-center space-x-1.5">
+                    <span className="text-amber-500 font-mono">⚡</span>
+                    <span>1. Auto-Create Drive Assets</span>
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                    Next Batch
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                  Scans Flow sheet for creators missing links, provisions the Google Drive folder structure, creates formatted Script Google Docs &amp; Video Draft folders, and writes URLs to Flow.
+                </p>
+
+                {/* Batch Size Selector */}
+                <div className="pt-1 space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Batch Size:</label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[15, 25, 50].map((size) => (
+                      <button
+                        key={size}
+                        type="button"
+                        onClick={() => setDriveBatchSize(size)}
+                        className={`py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          driveBatchSize === size
+                            ? "bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs"
+                            : "bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200"
+                        }`}
+                      >
+                        {size} rows
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Auto-Push Toggle */}
+                <label className="flex items-center space-x-2 pt-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={driveAutoPush}
+                    onChange={(e) => setDriveAutoPush(e.target.checked)}
+                    className="w-3.5 h-3.5 text-[#0052FF] rounded border-slate-300 focus:ring-[#0052FF]"
+                  />
+                  <span className="text-[11px] text-slate-700 font-semibold select-none">
+                    Auto-push links into Employee Sheets
+                  </span>
+                </label>
+              </div>
+
+              {activeAction === "create_drive_assets" ? (
+                <div className="flex items-center space-x-2 pt-2">
+                  <button
+                    disabled
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-amber-600 text-white font-bold text-xs flex items-center justify-center space-x-2 cursor-wait shadow-sm"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Creating Drive Assets... {Math.round(syncProgress)}%</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelAction}
+                    className="py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center space-x-1 cursor-pointer transition-all"
+                  >
+                    <Square className="w-3 h-3 fill-current" />
+                    <span>Cancel</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  disabled={activeAction !== null}
+                  onClick={() => executeAction("create_drive_assets", { autoPushToEmployees: driveAutoPush, maxRows: driveBatchSize })}
+                  className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition-all flex items-center justify-center space-x-2 shadow-xs cursor-pointer disabled:opacity-50 mt-2"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  <span>⚡ Auto-Create Drive Folders &amp; Docs</span>
+                </button>
+              )}
+            </div>
+
+            {/* Action 2: Push Links into Employee Sheets */}
+            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs hover:border-blue-300 transition-all space-y-3.5 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-slate-900 flex items-center space-x-1.5">
+                    <span className="text-blue-600 font-mono">📤</span>
+                    <span>2. Push Links to Employee Sheets</span>
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200">
+                    Live Injection
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                  Pushes all Script Google Doc links and Video Draft links from the master Flow sheet directly into each team member&apos;s personal Google Sheet.
+                </p>
+
+                {/* Target Employee Dropdown */}
+                <div className="pt-1 space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Target Employee Sheet:</label>
+                  <select
+                    value={driveTargetEmployee}
+                    onChange={(e) => setDriveTargetEmployee(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#0052FF] cursor-pointer"
+                  >
+                    <option value="ALL">All Active Employees ({employees.length})</option>
+                    {employees.map((emp) => (
+                      <option key={emp.id} value={emp.employee_name}>
+                        {emp.employee_name} ({emp.tab_name || "ExecutionSheet"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {activeAction === "push_drive_links" ? (
+                <div className="flex items-center space-x-2 pt-2">
+                  <button
+                    disabled
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-blue-700 text-white font-bold text-xs flex items-center justify-center space-x-2 cursor-wait shadow-sm"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Pushing to Employee Sheets... {Math.round(syncProgress)}%</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelAction}
+                    className="py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center space-x-1 cursor-pointer transition-all"
+                  >
+                    <Square className="w-3 h-3 fill-current" />
+                    <span>Cancel</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  disabled={activeAction !== null}
+                  onClick={() => executeAction("push_drive_links", { employee: driveTargetEmployee })}
+                  className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all flex items-center justify-center space-x-2 shadow-xs cursor-pointer disabled:opacity-50 mt-2"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>📤 Push Links to Employee Sheets</span>
+                </button>
+              )}
+            </div>
+
+            {/* Action 3: 1-Click Complete Pipeline */}
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-50/70 via-purple-50/40 to-white border border-purple-200 shadow-2xs hover:border-purple-300 transition-all space-y-3.5 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-slate-900 flex items-center space-x-1.5">
+                    <span className="text-purple-600 font-mono">🚀</span>
+                    <span>3. Master End-to-End Pipeline</span>
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-100 text-purple-900 border border-purple-200">
+                    Full Chain
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                  Executes the entire workflow automatically: Pulls employee data ➔ creates Drive folders &amp; Script Docs ➔ pushes links to employee sheets ➔ synchronizes database.
+                </p>
+
+                <div className="p-2.5 rounded-xl bg-white/90 border border-purple-100 text-[11px] text-slate-600 space-y-1">
+                  <div className="flex items-center space-x-1.5 text-purple-950 font-bold text-[10.5px]">
+                    <CheckCircle2 className="w-3 h-3 text-purple-600" />
+                    <span>Guaranteed Zero Data Overwrites</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    Existing rows, views, and manual brand names are preserved 100% in-memory.
+                  </p>
+                </div>
+              </div>
+
+              {activeAction === "full_drive_pipeline" ? (
+                <div className="flex items-center space-x-2 pt-2">
+                  <button
+                    disabled
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-purple-700 text-white font-bold text-xs flex items-center justify-center space-x-2 cursor-wait shadow-sm"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Running Full Pipeline... {Math.round(syncProgress)}%</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelAction}
+                    className="py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center space-x-1 cursor-pointer transition-all"
+                  >
+                    <Square className="w-3 h-3 fill-current" />
+                    <span>Cancel</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  disabled={activeAction !== null}
+                  onClick={() => executeAction("full_drive_pipeline")}
+                  className="w-full py-2.5 px-4 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs transition-all flex items-center justify-center space-x-2 shadow-xs cursor-pointer disabled:opacity-50 mt-2"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>🚀 Run Complete End-to-End Pipeline</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Live Creator Drive Links Table / Explorer */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+            {/* Table Control Bar */}
+            <div className="p-4 border-b border-slate-200 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center space-x-2">
+                    <span className="p-1 rounded-md bg-blue-100 text-[#0052FF]">
+                      <FolderOpen className="w-3.5 h-3.5" />
+                    </span>
+                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                      Creator Drive Assets &amp; Script Docs Explorer
+                    </h4>
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Showing <strong>{filteredDriveDeliverables.length}</strong> of {deliverables.length} deliverables
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => onSyncTriggered?.()}
+                    className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs border border-slate-200 transition-colors flex items-center space-x-1 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Refresh Data</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Search & Filter Pills Row */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 pt-1">
+                {/* Search Box */}
+                <div className="relative flex-1 max-w-md">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={driveSearch}
+                    onChange={(e) => setDriveSearch(e.target.value)}
+                    placeholder="Search creator name, campaign, brand, or POC..."
+                    className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#0052FF] focus:bg-white transition-all"
+                  />
+                  {driveSearch && (
+                    <button
+                      onClick={() => setDriveSearch("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter Pills */}
+                <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto no-scrollbar">
+                  {[
+                    { id: "ALL", label: `All (${driveStats.total})` },
+                    { id: "MISSING_DOC", label: `Missing Script Doc (${driveStats.total - driveStats.withScript})` },
+                    { id: "MISSING_DRAFT", label: `Missing Draft (${driveStats.total - driveStats.withDraft})` },
+                    { id: "MISSING_ANY", label: `Missing Any (${driveStats.missingAny})` },
+                    { id: "FULLY_LINKED", label: `Fully Linked (${driveStats.fullyLinked})` },
+                  ].map((filter) => (
+                    <button
+                      key={filter.id}
+                      type="button"
+                      onClick={() => setDriveFilterStatus(filter.id as any)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        driveFilterStatus === filter.id
+                          ? "bg-slate-900 text-white shadow-xs"
+                          : "bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200/60"
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Scrollable Table of Creators and Live Links */}
+            <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 shadow-2xs">
+                  <tr className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                    <th className="py-2.5 px-4 min-w-[200px]">Creator</th>
+                    <th className="py-2.5 px-3 min-w-[130px]">Campaign / Brand</th>
+                    <th className="py-2.5 px-3 min-w-[110px]">Execution Lead</th>
+                    <th className="py-2.5 px-3 min-w-[170px]">Script File (Script.txt)</th>
+                    <th className="py-2.5 px-3 min-w-[170px]">Video Draft Folder</th>
+                    <th className="py-2.5 px-3 min-w-[100px] text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {filteredDriveDeliverables.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-xs text-slate-400 font-medium">
+                        <div className="space-y-2">
+                          <FolderOpen className="w-8 h-8 text-slate-300 mx-auto" />
+                          <p>No creator records match your current filter or search query.</p>
+                          {(driveSearch || driveFilterStatus !== "ALL" || driveTargetEmployee !== "ALL") && (
+                            <button
+                              onClick={() => {
+                                setDriveSearch("");
+                                setDriveFilterStatus("ALL");
+                                setDriveTargetEmployee("ALL");
+                              }}
+                              className="text-[#0052FF] font-bold text-xs underline cursor-pointer"
+                            >
+                              Reset filters
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredDriveDeliverables.slice(0, 100).map((item) => {
+                      const hasScript = Boolean(item.script_link && item.script_link.trim().startsWith("http"));
+                      const hasDraft = Boolean(item.revision_drive_link && item.revision_drive_link.trim().startsWith("http"));
+                      const isComplete = hasScript && hasDraft;
+                      const owner = (item as any).execution_owner || item.xcelerate_poc || "Team Xcelerate";
+                      const brand = item.org_name || item.campaign_name || "General Brand";
+
+                      return (
+                        <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                          {/* Creator Profile */}
+                          <td className="py-2.5 px-4 align-middle">
+                            <div className="flex items-center space-x-2.5">
+                              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#0052FF] to-cyan-400 text-white font-black flex items-center justify-center text-xs shrink-0">
+                                {item.creator_name.charAt(0)}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center space-x-1.5 truncate">
+                                  <span className="font-extrabold text-slate-900 truncate">{item.creator_name}</span>
+                                  {item.profile_url && (
+                                    <a
+                                      href={item.profile_url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-slate-400 hover:text-[#0052FF] transition-colors shrink-0"
+                                      title="Open profile"
+                                    >
+                                      <ExternalLink className="w-3 h-3 inline" />
+                                    </a>
+                                  )}
+                                </div>
+                                <span className="text-[10px] text-slate-400 font-mono truncate block">
+                                  {item.followers_count > 0 ? `${(item.followers_count / 1000).toFixed(1)}k • ${item.category}` : item.category || "Creator"}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Campaign / Brand */}
+                          <td className="py-2.5 px-3 align-middle">
+                            <div className="font-semibold text-slate-800 text-xs truncate max-w-[130px]" title={brand}>
+                              {brand}
+                            </div>
+                            {item.campaign_id && (
+                              <span className="text-[10px] text-slate-400 font-mono">{item.campaign_id}</span>
+                            )}
+                          </td>
+
+                          {/* Execution Lead / Employee */}
+                          <td className="py-2.5 px-3 align-middle">
+                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200/80 text-[10px] font-bold">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                              <span>{owner}</span>
+                            </span>
+                          </td>
+
+                          {/* Script Google Doc Link */}
+                          <td className="py-2.5 px-3 align-middle">
+                            {hasScript ? (
+                              <div className="flex items-center space-x-1.5">
+                                <a
+                                  href={item.script_link}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#0052FF] border border-blue-200 text-[11px] font-bold transition-all shadow-2xs group"
+                                  title={item.script_link}
+                                >
+                                  <FileText className="w-3 h-3 text-[#0052FF]" />
+                                  <span>Open Script</span>
+                                  <ExternalLink className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100" />
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (typeof navigator !== "undefined" && navigator.clipboard) {
+                                      navigator.clipboard.writeText(item.script_link || "");
+                                      setCopiedLinkCreatorId(`${item.id}-script`);
+                                      setTimeout(() => setCopiedLinkCreatorId(null), 2000);
+                                    }
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-slate-700 transition-colors"
+                                  title="Copy Script Link"
+                                >
+                                  {copiedLinkCreatorId === `${item.id}-script` ? (
+                                    <Check className="w-3 h-3 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-3 h-3" />
+                                  )}
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 border border-slate-200 text-[10px] font-semibold">
+                                <Clock className="w-3 h-3 text-slate-400" />
+                                <span>Pending Script</span>
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Video Draft Folder Link */}
+                          <td className="py-2.5 px-3 align-middle">
+                            {hasDraft ? (
+                              <div className="flex items-center space-x-1.5">
+                                <a
+                                  href={item.revision_drive_link}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-[11px] font-bold transition-all shadow-2xs group"
+                                  title={item.revision_drive_link}
+                                >
+                                  <FolderOpen className="w-3 h-3 text-purple-600" />
+                                  <span>Open Draft Folder</span>
+                                  <ExternalLink className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100" />
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (typeof navigator !== "undefined" && navigator.clipboard) {
+                                      navigator.clipboard.writeText(item.revision_drive_link || "");
+                                      setCopiedLinkCreatorId(`${item.id}-draft`);
+                                      setTimeout(() => setCopiedLinkCreatorId(null), 2000);
+                                    }
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-slate-700 transition-colors"
+                                  title="Copy Video Draft Folder Link"
+                                >
+                                  {copiedLinkCreatorId === `${item.id}-draft` ? (
+                                    <Check className="w-3 h-3 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-3 h-3" />
+                                  )}
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 border border-slate-200 text-[10px] font-semibold">
+                                <Clock className="w-3 h-3 text-slate-400" />
+                                <span>Pending Draft Folder</span>
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Status Badge */}
+                          <td className="py-2.5 px-3 align-middle text-center">
+                            {isComplete ? (
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                <span>Ready</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
+                                <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                <span>Missing</span>
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Table Footer info */}
+            {filteredDriveDeliverables.length > 100 && (
+              <div className="p-3 bg-slate-50 border-t border-slate-200 text-center text-xs text-slate-500 font-medium">
+                Displaying first 100 creators. Use the search box above to narrow down results.
+              </div>
+            )}
+          </div>
         </div>
       )}
 

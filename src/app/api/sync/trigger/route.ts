@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     } catch (_) {
       body = {};
     }
-    const { action = "test", webAppUrl, employee, month, campaign } = body;
+    const { action = "test", webAppUrl, employee, month, campaign, autoPushToEmployees, maxRows } = body;
 
     const clientUrl = (webAppUrl && String(webAppUrl).trim().startsWith("http")) ? String(webAppUrl).trim() : null;
     const serverDefaultUrl = (process.env.GOOGLE_APPS_SCRIPT_WEBAPP_URL || process.env.NEXT_PUBLIC_GOOGLE_APPS_SCRIPT_WEBAPP_URL || "https://script.google.com/macros/s/AKfycbz5TbRW5dWaTrScczn6CnoqYaBtlKqvT3bYKbxT5Z8jV4NK4KG7QVI59fUa8YiKFdU1/exec").trim();
@@ -31,6 +31,8 @@ export async function POST(req: NextRequest) {
       if (employee) u.searchParams.set("employee", employee);
       if (month) u.searchParams.set("month", month);
       if (campaign) u.searchParams.set("campaign", campaign);
+      if (autoPushToEmployees !== undefined) u.searchParams.set("autoPushToEmployees", String(autoPushToEmployees));
+      if (maxRows) u.searchParams.set("maxRows", String(maxRows));
       const webhookOrigin = process.env.NEXT_PUBLIC_APP_URL 
         || process.env.NEXT_PUBLIC_TUNNEL_URL 
         || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "")
@@ -124,7 +126,69 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // CASE 2: In-Band Direct Data Ingestion (for sync_all, sync_campaign, sync_month)
+      // CASE 2: Google Drive & Script Docs Engine Actions
+      if (
+        action === "create_drive_assets" || 
+        action === "generate_drive_folders" || 
+        action === "push_drive_links" || 
+        action === "sync_drive_links" || 
+        action === "full_drive_pipeline" ||
+        action === "get_drive_status"
+      ) {
+        const createdCount = data.createdCount ?? data.driveAssetsCreated ?? 0;
+        const pushedCells = data.totalCellsUpdated ?? data.driveLinksPushed ?? 0;
+        const processedCount = data.totalProcessed ?? (createdCount || pushedCells);
+
+        let sourceName = "Google Drive Engine";
+        let detailsStr = data.message || `Drive Action '${action}' completed.`;
+
+        if (action === "create_drive_assets" || action === "generate_drive_folders") {
+          sourceName = "Google Drive Folders & Docs";
+          detailsStr = `Generated Drive assets for ${createdCount} creators. Remaining missing: ${data.remainingCount ?? 0}`;
+        } else if (action === "push_drive_links" || action === "sync_drive_links") {
+          sourceName = "Drive Links ➔ Employee Sheets";
+          detailsStr = `Pushed ${pushedCells} Drive links across ${data.sheetsUpdatedCount ?? 0} employee sheet(s) (${data.employee || "All"}).`;
+        } else if (action === "full_drive_pipeline") {
+          sourceName = "End-to-End Drive Pipeline";
+          detailsStr = `Full Pipeline: ${createdCount} drive assets created, ${pushedCells} links pushed to employee sheets.`;
+        }
+
+        if (action !== "get_drive_status") {
+          await db.execute({
+            sql: `INSERT INTO sync_logs (source, records_synced, status, details) VALUES (?, ?, ?, ?)`,
+            args: [
+              sourceName,
+              processedCount,
+              "SUCCESS",
+              detailsStr
+            ]
+          });
+        }
+
+        // If data includes rows (such as in full_drive_pipeline), write to database immediately!
+        if (Array.isArray(data.rows) && data.rows.length > 0) {
+          const syncRes = await syncGoogleSheetRows(data.rows);
+          return NextResponse.json({
+            ...data,
+            totalProcessed: syncRes.recordsProcessed,
+            totalUpdated: syncRes.updatedCount,
+            totalAppended: syncRes.newCount,
+            newCreators: syncRes.newCreators,
+            message: `${detailsStr} Also synchronized ${syncRes.recordsProcessed} deliverables to platform database.`,
+          });
+        }
+
+        return NextResponse.json({
+          success: true,
+          action,
+          ...data,
+          totalProcessed: processedCount,
+          totalUpdated: createdCount || pushedCells,
+          totalAppended: 0,
+        });
+      }
+
+      // CASE 3: In-Band Direct Data Ingestion (for sync_all, sync_campaign, sync_month)
       // When Apps Script returns rows array directly, write to Turso immediately!
       if (Array.isArray(data.rows) && data.rows.length > 0) {
         const syncRes = await syncGoogleSheetRows(data.rows);

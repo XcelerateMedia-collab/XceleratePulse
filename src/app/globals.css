@@ -82,10 +82,10 @@
   scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
 }
 
-/* Modal Inner Scroll Area (Scrollbar strictly contained inside, padded from corners) */
+/* Modal & Portfolio Inner Scroll Area */
 .custom-modal-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
 }
 .custom-modal-scroll::-webkit-scrollbar {
   width: 6px;
@@ -96,10 +96,32 @@
   margin-bottom: 8px;
 }
 .custom-modal-scroll::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.35);
+  background: rgba(148, 163, 184, 0.45);
   border-radius: 9999px;
 }
 .custom-modal-scroll::-webkit-scrollbar-thumb:hover {
+  background: #0052FF;
+}
+
+/* Portfolio Cards Dedicated Scrollbar */
+.custom-portfolio-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f1f5f9;
+}
+.custom-portfolio-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.custom-portfolio-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 9999px;
+  margin: 6px 0;
+}
+.custom-portfolio-scroll::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 9999px;
+  border: 2px solid #f1f5f9;
+}
+.custom-portfolio-scroll::-webkit-scrollbar-thumb:hover {
   background: #0052FF;
 }
 

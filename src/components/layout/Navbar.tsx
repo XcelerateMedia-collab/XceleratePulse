@@ -150,7 +150,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                   {isInternalAdmin ? "Admin Ops" : isEmployeeRole ? selectedOrg : isAnalystRole ? "Analyst" : selectedOrg}
                 </div>
                 <div className="text-[10px] text-slate-600 leading-tight mt-0.5 hidden sm:block">
-                  {isInternalAdmin ? "Full Financials & Margin Access" : isEmployeeRole ? "Employee • My Campaigns Only" : isAnalystRole ? "Read-Only • Metrics Editor" : "Brand Client Session"}
+                  {isInternalAdmin ? "Full Financials & Operations Access" : isEmployeeRole ? "Employee • My Campaigns Only" : isAnalystRole ? "Read-Only • Metrics Editor" : "Brand Client Session"}
                 </div>
               </div>
               <ChevronDown className="w-3.5 h-3.5 text-slate-600 ml-0.5 sm:ml-1 shrink-0" />
@@ -281,7 +281,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                             ADMIN
                           </span>
                         </div>
-                        <div className="text-[10px] text-slate-600">Unmask Gross Margins, Creator Costs &amp; CRM</div>
+                        <div className="text-[10px] text-slate-600">Unmask Creator Costs &amp; Internal Operations</div>
                       </div>
                       {isInternalAdmin && (
                         <CheckCircle2 className="w-4 h-4 text-[#0052FF]" />

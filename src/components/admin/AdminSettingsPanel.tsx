@@ -1471,7 +1471,7 @@ const CredentialDrawer: React.FC<DrawerProps> = ({
                   ? "Sees ONLY campaigns and creators assigned to their name (execution owner). Can fill performance metrics with screenshots and manage creator delivery stages. Settings and delete actions are permanently blocked."
                   : role === "PERFORMANCE_ANALYST"
                   ? "Can view all campaigns across the organization in read-only mode, and write/update reel performance metrics with screenshots. Commercials, campaign settings, and delete actions are permanently blocked."
-                  : "Can only view campaigns belonging to this specific client organization. Internal margins, creator costs, phone numbers, and settings are completely restricted."}
+                  : "Can only view campaigns belonging to this specific client organization. Internal creator costs, phone numbers, and settings are completely restricted."}
               </p>
             </div>
           </div>
