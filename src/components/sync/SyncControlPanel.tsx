@@ -1888,7 +1888,7 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                    Creates Owner ➔ Brand ➔ Creator folders, formatted Script Docs, and Video Draft folders in Drive.
+                    Creates Owner ➔ Month ➔ Brand ➔ Campaign ➔ Creator folders, editable Script Google Docs, Video Draft, and Screenshot folders in Drive.
                   </p>
                 </div>
 
@@ -2365,14 +2365,14 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
                   <span className="text-slate-400 text-xs font-semibold">•</span>
                   <span className="text-emerald-400 text-xs font-semibold flex items-center space-x-1">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span>Hierarchy: Owner ➔ Brand ➔ Creator</span>
+                    <span>Hierarchy: Owner ➔ Month ➔ Brand ➔ Campaign ➔ Creator</span>
                   </span>
                 </div>
                 <h3 className="text-lg font-black text-white flex items-center space-x-2">
                   <span>📁 Automated Google Drive &amp; Script Docs Engine</span>
                 </h3>
                 <p className="text-xs text-slate-300 font-medium leading-relaxed">
-                  Automatically provisions folder structures in Google Drive, creates formatted native Google Docs for creator scripts, generates Video Draft folders, and writes the links directly back into individual Employee Execution Sheets.
+                  Automatically provisions folder structures in Google Drive (Owner ➔ Campaign Month ➔ Brand ➔ Campaign ➔ Creator), creates formatted editable Google Docs for creator scripts, generates Screenshot &amp; Video Draft folders, and writes the links directly back into individual Employee Execution Sheets.
                 </p>
               </div>
 
@@ -2399,9 +2399,13 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
               <span className="text-slate-500">➔</span>
               <span className="px-2 py-0.5 rounded-md bg-white/10 text-blue-300">[Owner] Execution</span>
               <span className="text-slate-500">➔</span>
+              <span className="px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold">[Campaign Month]</span>
+              <span className="text-slate-500">➔</span>
               <span className="px-2 py-0.5 rounded-md bg-white/10 text-indigo-300">[Brand/Agency]</span>
               <span className="text-slate-500">➔</span>
-              <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">[Creator] (Video Draft + Screenshots + Script.txt)</span>
+              <span className="px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold">[Campaign Name]</span>
+              <span className="text-slate-500">➔</span>
+              <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">[Creator] (Screenshot + Video Draft + Script Doc)</span>
             </div>
           </div>
 
@@ -2507,7 +2511,7 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                  Scans Flow sheet for creators missing links, provisions the Google Drive folder structure, creates formatted Script Google Docs &amp; Video Draft folders, and writes URLs to Flow.
+                  Scans Flow sheet for creators missing links, provisions the Google Drive folder structure (Owner ➔ Month ➔ Brand ➔ Campaign ➔ Creator), creates editable Script Google Docs, Screenshot &amp; Video Draft folders, and writes URLs to Flow.
                 </p>
 
                 {/* Batch Size Selector */}
@@ -2783,7 +2787,7 @@ export const SyncControlPanel: React.FC<SyncControlPanelProps> = ({
                     <th className="py-2.5 px-4 min-w-[200px]">Creator</th>
                     <th className="py-2.5 px-3 min-w-[130px]">Campaign / Brand</th>
                     <th className="py-2.5 px-3 min-w-[110px]">Execution Lead</th>
-                    <th className="py-2.5 px-3 min-w-[170px]">Script File (Script.txt)</th>
+                    <th className="py-2.5 px-3 min-w-[170px]">Script Doc</th>
                     <th className="py-2.5 px-3 min-w-[170px]">Video Draft Folder</th>
                     <th className="py-2.5 px-3 min-w-[100px] text-center">Status</th>
                   </tr>

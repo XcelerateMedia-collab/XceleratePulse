@@ -2328,7 +2328,7 @@ function fixDuplicateFlowSheetIds() {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // AUTOMATED GOOGLE DRIVE FOLDER & SCRIPT DOC ENGINE
-// Creates: Execution Owner Folder ➔ Campaign Folder ➔ Creator Folder ➔ Script Doc + Video Drafts Folder
+// Creates: Execution Owner Folder ➔ Campaign Month ➔ Brand Name ➔ Campaign Name ➔ Creator Folder ➔ (Screenshot, Video Draft, Editable Script Doc)
 // High Performance: In-memory folder indexing, incremental cell updates, time guards & selected rows support.
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -2566,9 +2566,28 @@ function getOrCreateSubFolder(parentFolder, name) {
 }
 
 /**
- * Creates or retrieves a Google Doc for the creator's script inside the creator's folder.
- * Creates ONLY native Google Docs (never .txt files) and automatically trashes any stray .txt files.
+ * Normalizes and formats campaign month (e.g. 'Jan 2026', 'Apr 2026', 'May 2026').
+ * Handles raw strings, Date objects, and ISO date strings.
  */
+function formatCleanCampaignMonth(val) {
+  if (!val) {
+    return Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Kolkata", "MMM yyyy");
+  }
+  if (Object.prototype.toString.call(val) === "[object Date]" || val instanceof Date) {
+    return Utilities.formatDate(val, Session.getScriptTimeZone() || "Asia/Kolkata", "MMM yyyy");
+  }
+  var s = String(val).trim();
+  if (!s) {
+    return Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Kolkata", "MMM yyyy");
+  }
+  if (s.indexOf("T") !== -1 || /^\d{4}-\d{2}/.test(s)) {
+    var d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      return Utilities.formatDate(d, Session.getScriptTimeZone() || "Asia/Kolkata", "MMM yyyy");
+    }
+  }
+  return s;
+}
 /**
  * Reliably guarantees that a file is placed inside targetFolder.
  * Uses a robust relocation ladder (moveTo -> addFile -> makeCopy fallback)
@@ -2629,15 +2648,14 @@ function ensureFileInsideFolder(file, targetFolder, fileName) {
 
 /**
  * Ultra-fast single-pass creator asset generator:
- * Inspects creatorFolder with only 2 in-memory iterators (one for folders, one for files)
- * instead of 16 separate remote API searches.
+ * Inspects creatorFolder with minimal in-memory iterators.
  * Guarantees inside creatorFolder:
- * 1. "Video Draft" (folder)
- * 2. "Screenshots" (folder)
- * 3. "Script.txt" (plain text file with standard template)
+ * 1. "Screenshot" (folder)
+ * 2. "Video Draft" (folder)
+ * 3. "[Creator Name] - Script" (editable Google Doc)
  * Returns { scriptUrl, draftFolderUrl, screenshotFolderUrl, creatorFolderUrl }
  */
-function ensureCreatorAssets(creatorFolder, creatorName, campaignName, ownerName, brandName) {
+function ensureCreatorAssets(creatorFolder, creatorName, campaignName, ownerName, brandName, campaignMonth) {
   if (!creatorFolder) {
     return { scriptUrl: "", draftFolderUrl: "", screenshotFolderUrl: "", creatorFolderUrl: "" };
   }
@@ -2648,6 +2666,7 @@ function ensureCreatorAssets(creatorFolder, creatorName, campaignName, ownerName
   var safeBrand = String(brandName || "").trim() || "General Brand";
   var safeCamp = String(campaignName || "").trim() || "General Campaign";
   var safeOwner = String(ownerName || "").trim() || "Team Xcelerate";
+  var safeMonth = formatCleanCampaignMonth(campaignMonth);
   var nowFormatted = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Kolkata", "dd MMM yyyy");
 
   var scriptUrl = "";
@@ -2659,7 +2678,7 @@ function ensureCreatorAssets(creatorFolder, creatorName, campaignName, ownerName
     creatorFolderUrl = creatorFolder.getUrl();
   } catch (_) {}
 
-  // 1. Single-pass inspection of subfolders inside creatorFolder (0 API roundtrips beyond iterator)
+  // 1. Single-pass inspection of subfolders inside creatorFolder
   try {
     var subFolders = creatorFolder.getFolders();
     while (subFolders.hasNext()) {
@@ -2685,66 +2704,123 @@ function ensureCreatorAssets(creatorFolder, creatorName, campaignName, ownerName
     }
   }
 
-  // Create Screenshots folder ONLY if missing
+  // Create Screenshot folder ONLY if missing
   if (!screenshotFolderUrl) {
     try {
-      screenshotFolderUrl = creatorFolder.createFolder("Screenshots").getUrl();
+      screenshotFolderUrl = creatorFolder.createFolder("Screenshot").getUrl();
     } catch (err) {
-      Logger.log("Error creating Screenshots folder: " + err.toString());
+      Logger.log("Error creating Screenshot folder: " + err.toString());
     }
   }
 
-  // 2. Single-pass inspection of files inside creatorFolder (0 API roundtrips beyond iterator)
+  // 2. Single-pass inspection of files inside creatorFolder
+  var existingScriptDoc = null;
+  var existingTxtFile = null;
   try {
     var files = creatorFolder.getFiles();
     while (files.hasNext()) {
       var f = files.next();
       var fName = f.getName().toLowerCase();
-      if (fName === "script.txt" || fName.indexOf("script") !== -1) {
+      var mime = f.getMimeType();
+      if (mime === MimeType.GOOGLE_DOCS && (fName.indexOf("script") !== -1 || fName.indexOf(cleanName.toLowerCase()) !== -1)) {
+        existingScriptDoc = f;
         scriptUrl = f.getUrl();
         break;
+      } else if (fName === "script.txt" || fName.indexOf("script") !== -1) {
+        existingTxtFile = f;
       }
     }
   } catch (err) {
     Logger.log("Files scan error in " + cleanName + ": " + err.toString());
   }
 
-  // Create Script.txt ONLY if missing (directly inside creatorFolder, NEVER in My Drive!)
+  // Create native editable Google Doc ONLY if missing (directly inside creatorFolder, NEVER in My Drive!)
   if (!scriptUrl) {
     try {
-      var scriptContent = [
-        "═══════════════════════════════════════════════════════════════════════",
-        "CREATOR SCRIPT: " + cleanName,
-        "═══════════════════════════════════════════════════════════════════════",
-        "Brand / Agency : " + safeBrand,
-        "Campaign       : " + safeCamp,
-        "Creator        : " + cleanName,
-        "Execution Owner: " + safeOwner,
-        "Date Generated : " + nowFormatted,
-        "Status         : Script Pending",
-        "",
-        "═══════════════════════════════════════════════════════════════════════",
-        "1. CONCEPT & HOOK (Opening 3 Seconds):",
-        "[Insert visual hook, opening line, and on-screen dialogue/caption here]",
-        "",
-        "2. SCENE-BY-SCENE FLOW / SCRIPT:",
-        "Scene 1 (0:00 - 0:05): [Visual / Dialogue / Key Angle]",
-        "Scene 2 (0:05 - 0:15): [Core problem / Product introduction]",
-        "Scene 3 (0:15 - 0:30): [Product demonstration / Benefits]",
-        "Scene 4 (0:30 - 0:45): [Results / Final thoughts]",
-        "",
-        "3. CALL TO ACTION (CTA) & CAPTION:",
-        "[Insert brand offer, discount codes, website/app link, tags, hashtags]",
-        "═══════════════════════════════════════════════════════════════════════"
-      ].join("\n");
+      var docTitle = cleanName + " - Script";
+      var newDoc = DocumentApp.create(docTitle);
+      var docId = newDoc.getId();
+      var body = newDoc.getBody();
+      body.clear();
 
-      var newScript = creatorFolder.createFile("Script.txt", scriptContent, MimeType.PLAIN_TEXT);
+      var pTitle = body.appendParagraph("CREATOR SCRIPT: " + cleanName);
       try {
-        newScript.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        if (DocumentApp.ParagraphHeading && DocumentApp.ParagraphHeading.HEADING1) {
+          pTitle.setHeading(DocumentApp.ParagraphHeading.HEADING1);
+        }
       } catch (_) {}
-      scriptUrl = newScript.getUrl();
+      pTitle.setBold(true);
+
+      body.appendParagraph("═══════════════════════════════════════════════════════════════════════");
+      body.appendParagraph("• Brand / Agency : " + safeBrand);
+      body.appendParagraph("• Campaign       : " + safeCamp);
+      body.appendParagraph("• Campaign Month : " + safeMonth);
+      body.appendParagraph("• Creator        : " + cleanName);
+      body.appendParagraph("• Execution Owner: " + safeOwner);
+      body.appendParagraph("• Date Generated : " + nowFormatted);
+      body.appendParagraph("• Status         : Script Pending");
+      body.appendParagraph("═══════════════════════════════════════════════════════════════════════\n");
+
+      var p1 = body.appendParagraph("1. CONCEPT & HOOK (Opening 3 Seconds):");
+      try {
+        if (DocumentApp.ParagraphHeading && DocumentApp.ParagraphHeading.HEADING2) {
+          p1.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+        }
+      } catch (_) {}
+      p1.setBold(true);
+      body.appendParagraph("[Insert visual hook, opening line, and on-screen dialogue/caption here]\n");
+
+      var p2 = body.appendParagraph("2. SCENE-BY-SCENE FLOW / SCRIPT:");
+      try {
+        if (DocumentApp.ParagraphHeading && DocumentApp.ParagraphHeading.HEADING2) {
+          p2.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+        }
+      } catch (_) {}
+      p2.setBold(true);
+      body.appendParagraph("Scene 1 (0:00 - 0:05): [Visual / Dialogue / Key Angle]");
+      body.appendParagraph("Scene 2 (0:05 - 0:15): [Core problem / Product introduction]");
+      body.appendParagraph("Scene 3 (0:15 - 0:30): [Product demonstration / Benefits]");
+      body.appendParagraph("Scene 4 (0:30 - 0:45): [Results / Final thoughts]\n");
+
+      var p3 = body.appendParagraph("3. CALL TO ACTION (CTA) & CAPTION:");
+      try {
+        if (DocumentApp.ParagraphHeading && DocumentApp.ParagraphHeading.HEADING2) {
+          p3.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+        }
+      } catch (_) {}
+      p3.setBold(true);
+      body.appendParagraph("[Insert brand offer, discount codes, website/app link, tags, hashtags]");
+
+      newDoc.saveAndClose();
+
+      var docFile = DriveApp.getFileById(docId);
+      // Reliably moves the Google Doc from My Drive into creatorFolder
+      ensureFileInsideFolder(docFile, creatorFolder, docTitle);
+
+      // Make doc editable by anyone with link
+      try {
+        docFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+      } catch (shareErr) {
+        Logger.log("Permission sharing error: " + shareErr.toString());
+      }
+
+      scriptUrl = docFile.getUrl();
+
+      // If an old Script.txt was present, trash it so only the editable Doc remains
+      if (existingTxtFile) {
+        try { existingTxtFile.setTrashed(true); } catch (_) {}
+      }
     } catch (err) {
-      Logger.log("Error creating Script.txt: " + err.toString());
+      Logger.log("Error creating Google Doc for " + cleanName + ": " + err.toString());
+      if (existingTxtFile) {
+        scriptUrl = existingTxtFile.getUrl();
+      } else {
+        try {
+          var fallbackScript = creatorFolder.createFile(cleanName + " - Script.txt", "CREATOR SCRIPT: " + cleanName + "\nBrand: " + safeBrand + "\nCampaign: " + safeCamp + "\nMonth: " + safeMonth, MimeType.PLAIN_TEXT);
+          try { fallbackScript.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch (_) {}
+          scriptUrl = fallbackScript.getUrl();
+        } catch (_) {}
+      }
     }
   }
 
@@ -2760,8 +2836,8 @@ function ensureCreatorAssets(creatorFolder, creatorName, campaignName, ownerName
  * Creates or retrieves the script file inside creator's folder.
  * Guaranteed backward-compatible wrapper around ensureCreatorAssets.
  */
-function getOrCreateScriptFile(creatorFolder, creatorName, campaignName, ownerName, brandName) {
-  var assets = ensureCreatorAssets(creatorFolder, creatorName, campaignName, ownerName, brandName);
+function getOrCreateScriptFile(creatorFolder, creatorName, campaignName, ownerName, brandName, campaignMonth) {
+  var assets = ensureCreatorAssets(creatorFolder, creatorName, campaignName, ownerName, brandName, campaignMonth);
   return assets.scriptUrl || "";
 }
 var getOrCreateScriptDoc = getOrCreateScriptFile;
@@ -2778,7 +2854,7 @@ var getOrCreateVideoDraftFolder = getOrCreateVideoRevisedFolder;
 var getOrCreateVideoDraftsFolder = getOrCreateVideoRevisedFolder;
 
 /**
- * Creates or retrieves the "Screenshots" folder inside creator's folder.
+ * Creates or retrieves the "Screenshot" folder inside creator's folder.
  * Guaranteed backward-compatible wrapper around ensureCreatorAssets.
  */
 function getOrCreateScreenshotsFolder(creatorFolder, creatorName) {
@@ -2842,14 +2918,14 @@ function menuCleanupStrayDriveFiles() {
   var res = cleanupStrayScriptDocsFromMyDrive();
   SpreadsheetApp.getUi().alert(
     "🧹 Drive Cleanup Finished",
-    "Successfully relocated " + res.movedCount + " stray script file(s) from root My Drive into their creator folders!\n\nAll creator folders now contain:\n• Video Draft (Folder)\n• Screenshots (Folder)\n• Script.txt (File)",
+    "Successfully relocated " + res.movedCount + " stray script file(s) from root My Drive into their creator folders!\n\nAll creator folders now contain:\n• Screenshot (Folder)\n• Video Draft (Folder)\n• Script Doc (Editable Google Doc)",
     SpreadsheetApp.getUi().ButtonSet.OK
   );
 }
 
 /**
  * Core Batch Engine: Iterates rows, checks if Script link or Revision Drive link is missing,
- * creates Drive hierarchy: Execution Owner ➔ Brand/Agency ➔ Creator ➔ (Script Doc, Video Draft, Screenshots)
+ * creates Drive hierarchy: Execution Owner ➔ Campaign Month ➔ Brand Name ➔ Campaign Name ➔ Creator ➔ (Screenshot, Video Draft, Editable Script Doc)
  * 
  * Options:
  * - maxRows: Maximum rows to process in this run (prevents timeout, defaults to 25)
@@ -2872,6 +2948,9 @@ function autoCreateDriveAssetsForRows(flowSheet, flowColMap, flowDataRows, optio
 
   var creatorCol = findFlowColIndexByKeys(flowColMap, [
     "creatorname", "creator", "creatorsname", "influencername", "creatornameinfluencername"
+  ]);
+  var monthCol = findFlowColIndexByKeys(flowColMap, [
+    "campaignmonth", "month", "campaignmonths", "monthyear", "campmonth", "campaignmonthy"
   ]);
   var brandCol = findFlowColIndexByKeys(flowColMap, [
     "brandagencyname", "brandname", "agencyname", "brand", "agency", "brandagency"
@@ -2917,7 +2996,9 @@ function autoCreateDriveAssetsForRows(flowSheet, flowColMap, flowDataRows, optio
 
   // Pre-index existing owner folders in root in ONE query!
   var ownerIndex = buildRootFolderIndex(rootFolder);
+  var monthCache = {};
   var brandCache = {};
+  var campCache = {};
   var creatorCache = {};
 
   var createdCount = 0;
@@ -2977,6 +3058,9 @@ function autoCreateDriveAssetsForRows(flowSheet, flowColMap, flowDataRows, optio
     var ownerName = ownerCol ? String(row[ownerCol - 1] || "").trim() : "";
     if (!ownerName) ownerName = "Team Execution";
 
+    var rawMonth = monthCol ? row[monthCol - 1] : "";
+    var campaignMonth = formatCleanCampaignMonth(rawMonth);
+
     var campName = campCol ? String(row[campCol - 1] || "").trim() : "";
     if (!campName) campName = "General Campaign";
 
@@ -2985,33 +3069,53 @@ function autoCreateDriveAssetsForRows(flowSheet, flowColMap, flowDataRows, optio
       brandName = campName ? (campName.split(/\s+|-|_/)[0] || "General Brand") : "General Brand";
     }
 
+    var cleanMonthKey = campaignMonth.toLowerCase().replace(/[^a-z0-9]/g, "");
     var cleanBrandKey = brandName.toLowerCase().replace(/[^a-z0-9]/g, "");
+    var cleanCampKey = campName.toLowerCase().replace(/[^a-z0-9]/g, "");
     var cleanCrKey = creatorName.toLowerCase().replace(/[^a-z0-9]/g, "");
 
     // 1. Get or create Execution Owner Folder
     var ownerFolder = getExecutionOwnerFolder(rootFolder, ownerName, ownerIndex);
     if (!ownerFolder) continue;
 
-    // 2. Get or create Brand/Agency Folder
-    var brandKey = ownerFolder.getId() + "_" + cleanBrandKey;
+    // 2. Get or create Campaign Month Folder inside Owner Folder (e.g. "Jan 2026", "Apr 2026", "May 2026")
+    var monthKey = ownerFolder.getId() + "_" + cleanMonthKey;
+    var monthFolder = monthCache[monthKey];
+    if (!monthFolder) {
+      monthFolder = getOrCreateSubFolder(ownerFolder, campaignMonth);
+      if (monthFolder) monthCache[monthKey] = monthFolder;
+    }
+    if (!monthFolder) continue;
+
+    // 3. Get or create Brand/Agency Folder inside Month Folder (e.g. "Barcode", "HiveMinds", "Dominos")
+    var brandKey = monthFolder.getId() + "_" + cleanBrandKey;
     var brandFolder = brandCache[brandKey];
     if (!brandFolder) {
-      brandFolder = getOrCreateSubFolder(ownerFolder, brandName);
+      brandFolder = getOrCreateSubFolder(monthFolder, brandName);
       if (brandFolder) brandCache[brandKey] = brandFolder;
     }
     if (!brandFolder) continue;
 
-    // 3. Get or create Creator Folder
-    var crKey = brandFolder.getId() + "_" + cleanCrKey;
+    // 4. Get or create Campaign Name Folder inside Brand Folder (e.g. "Livon-Barcode Jan", "Dominos-May2026")
+    var campKey = brandFolder.getId() + "_" + cleanCampKey;
+    var campFolder = campCache[campKey];
+    if (!campFolder) {
+      campFolder = getOrCreateSubFolder(brandFolder, campName);
+      if (campFolder) campCache[campKey] = campFolder;
+    }
+    if (!campFolder) continue;
+
+    // 5. Get or create Creator Folder inside Campaign Folder (e.g. "Charvi", "Devna")
+    var crKey = campFolder.getId() + "_" + cleanCrKey;
     var crFolder = creatorCache[crKey];
     if (!crFolder) {
-      crFolder = getOrCreateSubFolder(brandFolder, creatorName);
+      crFolder = getOrCreateSubFolder(campFolder, creatorName);
       if (crFolder) creatorCache[crKey] = crFolder;
     }
     if (!crFolder) continue;
 
-    // 4. Ultra-fast single-pass creation of Video Draft, Screenshots & Script.txt
-    var assets = ensureCreatorAssets(crFolder, creatorName, campName, ownerName, brandName);
+    // 6. Ultra-fast creation/verification of Screenshot (folder), Video Draft (folder) & editable Script Google Doc
+    var assets = ensureCreatorAssets(crFolder, creatorName, campName, ownerName, brandName, campaignMonth);
     var rowModified = false;
 
     if (assets.scriptUrl && scriptCol) {
@@ -3122,7 +3226,7 @@ function menuCreateDriveAssetsForSelectedRows() {
   var rowsData = sheet.getRange(actualStartRow, 1, actualCount, lastCol).getValues();
 
   try {
-    ss.toast("Ensuring Video Draft, Screenshots & Script.txt for " + actualCount + " selected row(s)...", "⚡ Xcelerate Pulse", 3);
+    ss.toast("Ensuring Screenshot, Video Draft & Script Doc for " + actualCount + " selected row(s)...", "⚡ Xcelerate Pulse", 3);
   } catch (_) {}
 
   var res = autoCreateDriveAssetsForRows(sheet, colMap, rowsData, {
@@ -3169,11 +3273,11 @@ function menuCreateDriveAssetsForSelectedRows() {
     SpreadsheetApp.getUi().alert(
       "📁 Drive Creation Complete!",
       "Successfully created & verified Drive assets for " + res.createdCount + " creator(s)!\n\n" +
-      "• Hierarchy: Xcelerate Media Pipeline > Xcelerate Media Execution > [Owner] > [Brand/Agency] > [Creator]\n" +
+      "• Hierarchy: Xcelerate Media Pipeline > Xcelerate Media Execution > [Owner] > [Campaign Month] > [Brand/Agency] > [Campaign Name] > [Creator]\n" +
       "• 3 Items inside Creator Folder:\n" +
-      "  1. Video Draft (Folder)\n" +
-      "  2. Screenshots (Folder)\n" +
-      "  3. Script.txt (Script File)\n\n" +
+      "  1. Screenshot (Folder)\n" +
+      "  2. Video Draft (Folder)\n" +
+      "  3. Script Doc (Editable Google Doc)\n\n" +
       "Links have been saved directly into your sheet cells!" + empNote,
       SpreadsheetApp.getUi().ButtonSet.OK
     );
@@ -3330,7 +3434,8 @@ function menuAutoCreateDriveAssetsForFlow(isSilent) {
 
     if (!isSilent) {
       var msg = "Successfully verified & created Drive assets for " + res.createdCount + " creator(s)!\n\n" +
-                "• Path: Xcelerate Media Pipeline > Xcelerate Media Execution > [Owner] > [Brand/Agency] > [Creator]\n" +
+                "• Path: Xcelerate Media Pipeline > Xcelerate Media Execution > [Owner] > [Campaign Month] > [Brand/Agency] > [Campaign Name] > [Creator]\n" +
+                "• 3 Items inside Creator: Screenshot (Folder), Video Draft (Folder), Script Doc (Editable Google Doc)\n" +
                 "• All links saved directly to your Flow sheet.\n";
       if (empSyncRes && empSyncRes.totalCellsUpdated > 0) {
         msg += "• Populated " + empSyncRes.totalCellsUpdated + " link(s) directly into Employee Execution Sheet(s)!\n";
